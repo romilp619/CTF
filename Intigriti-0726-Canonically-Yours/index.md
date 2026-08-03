@@ -92,7 +92,7 @@ differently.
 
 
 
-## Step 5 - Create a duplicate-key manifest
+## Step 5 - Intercept Request in Burpsuite find the endpoint named /api/manifests/sign and create a duplicate-key manifest
 
 I created a raw JSON manifest with two top-level properties named `package`.
 Replace `YOUR_NAMESPACE` with the namespace returned by `/api/me`.
@@ -128,12 +128,16 @@ The second package references the protected target:
 ```text
 @core/security-notes
 ```
+<img width="1460" height="291" alt="image" src="https://github.com/user-attachments/assets/bb8e9265-c348-4e9c-998a-0ff7b6781d7b" />
+
+<img width="2234" height="1191" alt="image" src="https://github.com/user-attachments/assets/1f6ff753-5438-457f-b1d8-227d67e7a914" />
+
+
+
 
 I Base64-encoded the exact raw JSON without formatting it. JSON formatters can
 remove duplicate object keys, which would break the proof of concept.
 
-
-<img width="2089" height="1284" alt="image" src="https://github.com/user-attachments/assets/d125edaf-1935-4142-a7ad-4b75c79d49f5" />
 
 ## Step 6 - Request manifest approval
 
@@ -153,11 +157,14 @@ Cookie: REDACTED
 
 The application accepted the manifest and returned a valid approval.
 
-<img width="2140" height="1308" alt="image" src="https://github.com/user-attachments/assets/dd28869c-93ce-419c-b3ff-92d5506d3f77" />
+<img width="2094" height="1263" alt="image" src="https://github.com/user-attachments/assets/fe4c3fc8-d324-4f3a-990a-b5a3d2d1d18c" />
+
 
 ## Step 7 - Publish the exact same signed manifest
 
-I sent the exact same Base64 manifest and the approval fields to:
+I added and sent the exact same Base64 manifest and the approval fields to:
+
+Note: add the csrftoken and Content-Type: application/json
 
 ```http
 POST /api/publications HTTP/2
@@ -178,9 +185,13 @@ Cookie: REDACTED
 
 The server created a ready publication and returned a publication ID.
 
-<img width="2178" height="1204" alt="image" src="https://github.com/user-attachments/assets/235f08d8-c4b8-4db7-8e54-18d70019d35d" />
+<img width="2033" height="1144" alt="image" src="https://github.com/user-attachments/assets/6691dc57-c7db-4cf4-950e-dd7320892d5c" />
 
-## Step 8 - Retrieve the protected report
+
+
+
+
+## Step 8 Retrieve the protected report
 
 I requested the generated report:
 
@@ -196,11 +207,10 @@ The report was generated for the protected package:
 @core/security-notes@1.0.0
 ```
 
-<img width="2032" height="1185" alt="image" src="https://github.com/user-attachments/assets/63b1112c-d2ac-4b30-bc00-ad9fdbb7c9e5" />
-
 <img width="2038" height="1254" alt="image" src="https://github.com/user-attachments/assets/b3ab023f-c509-4df0-9085-cc15e0cc4f8c" />
 
 ## Flag
 
 ```text
+INTIGRITI{019f8700-4613-74fb-923e-781903e4bee9}
 
