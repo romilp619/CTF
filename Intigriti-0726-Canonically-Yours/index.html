@@ -162,7 +162,7 @@ Version: 1.0.0</code></pre>
           <pre><code>Historical ingestion retains the initial package declaration;
 report rendering uses reconstructed manifest data.</code></pre>
           <p>This indicated that different components might interpret the manifest differently.</p>
-          <figure class="image"><img src="assets/screenshots/04-normal-approval.png" alt="Normal manifest workflow and hint" loading="lazy" /><figcaption>Normal manifest workflow and the parser-differential hint</figcaption></figure>
+          <figure class="image"><img src="screenshots/04-normal-approval.png" alt="Normal manifest workflow and hint" loading="lazy" /><figcaption>Normal manifest workflow and the parser-differential hint</figcaption></figure>
         </section>
 
         <section id="step-5">
@@ -187,8 +187,8 @@ report rendering uses reconstructed manifest data.</code></pre>
 }</code></pre>
           <p>The first package belongs to the current account, <code>@YOUR_NAMESPACE/legacy-adapter</code>. The later declaration references <code>@core/security-notes</code>.</p>
           <div class="callout"><strong>Important:</strong> I Base64-encoded the exact raw JSON without formatting it. Many JSON formatters silently remove duplicate object keys, which breaks the proof of concept.</div>
-          <figure class="image"><img src="assets/screenshots/05-duplicate-manifest.png" alt="Raw duplicate-key JSON manifest" loading="lazy" /><figcaption>Raw manifest containing duplicate <code>package</code> keys</figcaption></figure>
-          <figure class="image"><img src="assets/screenshots/06-signing-request-redacted.png" alt="Burp Suite request to sign the duplicate-key manifest and the successful approval response" loading="lazy" /><figcaption>Signing the exact Base64-encoded manifest in Burp Suite (session and CSRF values redacted)</figcaption></figure>
+          <figure class="image"><img src="screenshots/05-duplicate-manifest.png" alt="Raw duplicate-key JSON manifest" loading="lazy" /><figcaption>Raw manifest containing duplicate <code>package</code> keys</figcaption></figure>
+          <figure class="image"><img src="screenshots/06-signing-request-redacted.png" alt="Burp Suite request to sign the duplicate-key manifest and the successful approval response" loading="lazy" /><figcaption>Signing the exact Base64-encoded manifest in Burp Suite (session and CSRF values redacted)</figcaption></figure>
         </section>
 
         <section id="step-6">
@@ -204,7 +204,7 @@ Cookie: REDACTED
   "manifest_b64": "BASE64_ENCODED_DUPLICATE_KEY_MANIFEST"
 }</code></pre>
           <p>The application accepted the manifest and returned a valid approval.</p>
-          <figure class="image"><img src="assets/screenshots/06-sign-approval.png" alt="Successful manifest signing response" loading="lazy" /><figcaption>Successful signing response</figcaption></figure>
+          <figure class="image"><img src="screenshots/06-sign-approval.png" alt="Successful manifest signing response" loading="lazy" /><figcaption>Successful signing response</figcaption></figure>
         </section>
 
         <section id="step-7">
@@ -225,7 +225,7 @@ Cookie: REDACTED
   "signature": "REDACTED"
 }</code></pre>
           <p>The server created a ready publication and returned a publication ID.</p>
-          <figure class="image"><img src="assets/screenshots/07-publication-created.png" alt="Successful publication response" loading="lazy" /><figcaption>Publication created successfully</figcaption></figure>
+          <figure class="image"><img src="screenshots/07-publication-created.png" alt="Successful publication response" loading="lazy" /><figcaption>Publication created successfully</figcaption></figure>
         </section>
 
         <section id="step-8">
@@ -235,7 +235,7 @@ Cookie: REDACTED
 Host: challenge-0726.intigriti.io
 Cookie: REDACTED</code></pre>
           <p>The report was generated for the protected package <code>@core/security-notes@1.0.0</code>.</p>
-          <figure class="image"><img src="assets/screenshots/08-protected-report.png" alt="Protected report containing the flag" loading="lazy" /><figcaption>Protected report disclosure</figcaption></figure>
+          <figure class="image"><img src="screenshots/08-protected-report.png" alt="Protected report containing the flag" loading="lazy" /><figcaption>Protected report disclosure</figcaption></figure>
           <div class="flag"><strong>Flag</strong><br /><code>INTIGRITI{019f8700-4613-74fb-923e-781903e4bee9}</code></div>
         </section>
 
