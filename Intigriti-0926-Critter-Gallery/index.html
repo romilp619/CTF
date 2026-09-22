@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Critter Gallery · Intigriti 0926 write-up</title>
+<meta name="description" content="Step-by-step write-up of Intigriti's September 2026 challenge: a base64-wrapped parameter, a case-sensitivity differential that exposed a hidden database, and union-based SQL injection into a table the application never references.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#129418;</text></svg>">
+
+<meta property="og:type" content="article">
+<meta property="og:title" content="Critter Gallery · Intigriti 0926">
+<meta property="og:description" content="Base64 is an encoding, not a filter. One uppercase letter exposed the database behind it.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Critter Gallery · Intigriti 0926">
+<meta name="twitter:description" content="Base64 is an encoding, not a filter. One uppercase letter exposed the database behind it.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+  :root {
+    --paper:#F2F4F6; --surface:#FFFFFF; --surface-2:#E8ECEF;
+    --ink:#161B21; --ink-2:#3D4753; --muted:#6B7784; --rule:#D3DAE0;
+    --signal:#0E8A80; --signal-dim:#D7EEEC; --loss:#C24122; --loss-dim:#FBE6E0;
+    --screen:#0B0E12; --screen-ink:#C9D6DD; --screen-dim:#6E7F8A;
+    --shadow:0 1px 2px rgba(22,27,33,.05), 0 8px 24px -12px rgba(22,27,33,.18);
+    --measure:72ch;
+    --step--1:clamp(.78rem,.76rem + .1vw,.84rem);
+    --step-0:clamp(1rem,.97rem + .16vw,1.09rem);
+    --step-1:clamp(1.2rem,1.13rem + .34vw,1.42rem);
+    --step-2:clamp(1.5rem,1.36rem + .68vw,2rem);
+    --step-3:clamp(2rem,1.7rem + 1.5vw,3.1rem);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0D1014; --surface:#151A20; --surface-2:#1D242C;
+      --ink:#E2E8ED; --ink-2:#B4C0CA; --muted:#8898A5; --rule:#28313A;
+      --signal:#4ECDC4; --signal-dim:#12302F; --loss:#FF8459; --loss-dim:#381D14;
+      --screen:#070A0D; --screen-ink:#C9D6DD; --screen-dim:#6E7F8A;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0D1014; --surface:#151A20; --surface-2:#1D242C;
+    --ink:#E2E8ED; --ink-2:#B4C0CA; --muted:#8898A5; --rule:#28313A;
+    --signal:#4ECDC4; --signal-dim:#12302F; --loss:#FF8459; --loss-dim:#381D14;
+    --screen:#070A0D; --screen-ink:#C9D6DD; --screen-dim:#6E7F8A;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size:var(--step-0); line-height:1.65; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:var(--measure); margin-inline:auto; padding:0 1.4rem; }
+  h1,h2,h3,h4 { font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif; text-wrap:balance; line-height:1.14; margin:0; }
+  a { color:var(--signal); text-underline-offset:3px; }
+  a:focus-visible { outline:2px solid var(--signal); outline-offset:3px; border-radius:3px; }
+  code, pre, .osd, .tag { font-family:"IBM Plex Mono", ui-monospace, monospace; }
+
+  .mast { border-bottom:1px solid var(--rule); padding:clamp(3rem,9vw,6rem) 0 2.6rem; }
+  .eyebrow {
+    font-family:"IBM Plex Mono",monospace; font-size:var(--step--1); letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); display:flex; flex-wrap:wrap; gap:.5rem 1rem; align-items:center;
+  }
+  .eyebrow .dot { width:7px;height:7px;border-radius:50%;background:var(--loss);flex:none; }
+  h1 { font-size:var(--step-3); font-weight:700; letter-spacing:-.02em; margin:1rem 0 .8rem; }
+  .standfirst { font-size:var(--step-1); color:var(--ink-2); max-width:56ch; margin:0 0 1.6rem; }
+
+  .strip {
+    display:grid; grid-template-columns:repeat(8,1fr); gap:.4rem; margin-top:2.2rem;
+    background:#141833; border:1px solid #0b0e1f; border-radius:8px 8px 0 0; padding:.7rem .6rem;
+  }
+  .strip i { font-style:normal; font-size:clamp(1.1rem,4.2vw,1.7rem); text-align:center; opacity:.9; }
+  .striplink {
+    background:#141833; border:1px solid #0b0e1f; border-top:0; border-radius:0 0 8px 8px;
+    padding:.6rem .9rem; text-align:center;
+    font-family:"IBM Plex Mono",monospace; font-size:.68rem;
+    letter-spacing:.16em; text-transform:uppercase; color:#8f96c8;
+  }
+  .striplink a { color:#a9b2e8; text-decoration:none; }
+  .striplink a::before { content:"\203A "; color:#4ECDC4; }
+  .striplink a:hover { color:#4ECDC4; }
+
+
+  section { padding:3.4rem 0 0; }
+  .ch {
+    display:flex; align-items:baseline; gap:.8rem; font-family:"IBM Plex Mono",monospace;
+    font-size:.72rem; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin-bottom:.7rem;
+  }
+  .ch::after { content:""; flex:1; height:1px; background:var(--rule); }
+  h2 { font-size:var(--step-2); font-weight:600; letter-spacing:-.015em; margin-bottom:.9rem; }
+  h4 {
+    font-family:"IBM Plex Mono",monospace; font-size:.74rem; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--signal); margin:1.8rem 0 .5rem; font-weight:600;
+  }
+  p { margin:0 0 1.05rem; }
+  ul, ol { margin:0 0 1.05rem; padding-left:1.2rem; }
+  li { margin-bottom:.4rem; }
+  strong { font-weight:600; }
+  p code, li code, td code, figcaption code { background:var(--surface-2); padding:.1em .36em; border-radius:3px; font-size:.87em; word-break:break-word; }
+
+  figure { margin:1.5rem 0; }
+  .screen { position:relative; background:var(--screen); border-radius:5px; border:1px solid #000; overflow:hidden; box-shadow:var(--shadow); }
+  .screen-bar {
+    display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:.5rem .85rem;
+    border-bottom:1px solid rgba(255,255,255,.09); font-family:"IBM Plex Mono",monospace;
+    font-size:.68rem; letter-spacing:.13em; text-transform:uppercase; color:var(--screen-dim);
+  }
+  .screen pre { margin:0; padding:.95rem .85rem; overflow-x:auto; color:var(--screen-ink); font-size:.8rem; line-height:1.65; }
+  .screen pre::-webkit-scrollbar { height:9px; }
+  .screen pre::-webkit-scrollbar-thumb { background:#2A343D; border-radius:9px; }
+  .k { color:#4ECDC4; } .s { color:#E2B45E; } .c { color:var(--screen-dim); font-style:italic; } .bad { color:#FF8459; }
+  figcaption { font-size:var(--step--1); color:var(--muted); margin-top:.55rem; }
+
+  /* screenshots */
+  .shot { margin:1.7rem 0; }
+  .shot img {
+    display:block; width:100%; height:auto; border:1px solid var(--rule);
+    border-radius:5px; background:var(--surface-2); box-shadow:var(--shadow);
+  }
+  .shot figcaption { margin-top:.6rem; }
+  .shot figcaption b { color:var(--ink-2); font-weight:600; }
+  .shotnum {
+    display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:.62rem;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--signal);
+    border:1px solid var(--rule); border-radius:3px; padding:.12em .45em; margin-right:.5rem;
+  }
+
+  .note { border:1px solid var(--rule); border-left:3px solid var(--loss); background:var(--surface); border-radius:3px; padding:1rem 1.1rem; margin:1.5rem 0; }
+  .note.good { border-left-color:var(--signal); }
+  .note p:last-child { margin-bottom:0; }
+  .note .lab { font-family:"IBM Plex Mono",monospace; font-size:.68rem; letter-spacing:.15em; text-transform:uppercase; color:var(--loss); display:block; margin-bottom:.35rem; }
+  .note.good .lab { color:var(--signal); }
+
+  .tw { overflow-x:auto; margin:1.5rem 0; border:1px solid var(--rule); border-radius:4px; }
+  table { border-collapse:collapse; width:100%; font-size:var(--step--1); min-width:460px; }
+  th, td { text-align:left; padding:.68rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th { font-family:"IBM Plex Mono",monospace; font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); background:var(--surface-2); font-weight:500; }
+  tbody tr:last-child td { border-bottom:0; }
+  td:first-child { font-weight:500; }
+  .tag { display:inline-block; font-size:.66rem; letter-spacing:.1em; text-transform:uppercase; padding:.18em .5em; border-radius:3px; white-space:nowrap; }
+  .tag.hi { background:var(--loss-dim); color:var(--loss); }
+  .tag.md { background:var(--signal-dim); color:var(--signal); }
+
+  /* vault reveal */
+  .reveal { margin:3.4rem 0 0; }
+  .vault {
+    position:relative; background:#05070A; border-radius:10px; padding:clamp(2rem,7vw,3.6rem) 1.2rem;
+    text-align:center; overflow:hidden; border:1px solid #000; box-shadow:inset 0 0 90px rgba(0,0,0,.9), var(--shadow);
+  }
+  .vault::before { content:""; position:absolute; inset:0; background:radial-gradient(ellipse at center, rgba(120,190,200,.10), transparent 62%); }
+  .vault .osd { position:relative; font-size:.78rem; letter-spacing:.34em; color:#8FA3AC; margin-bottom:1.1rem; }
+  .vault .flag { position:relative; font-family:"IBM Plex Mono",monospace; font-weight:500; font-size:clamp(.72rem,2.5vw,1.06rem); color:#EAF3F6; word-break:break-all; text-shadow:0 0 14px rgba(150,220,230,.5); }
+  .vault.warming .osd, .vault.warming .flag { opacity:0; }
+  .vault.lit .osd  { animation:fadein .5s ease-out .15s both; }
+  .vault.lit .flag { animation:fadein .6s ease-out .4s both; }
+  @keyframes fadein { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .vault.warming .osd, .vault.warming .flag { opacity:1; }
+    .vault.lit .osd, .vault.lit .flag { animation:none; }
+  }
+  .caret { display:inline-block; width:.55em; height:1.05em; background:#EAF3F6; vertical-align:-.16em; margin-left:.22em; animation:blink 1.15s steps(1) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { .caret { animation:none; } }
+
+
+  .wrap > section:last-of-type { padding-bottom:4rem; }
+
+  .signoff { margin:3.4rem 0 4.5rem; text-align:center; }
+  .signoff .bars { display:flex; height:26px; border-radius:3px; overflow:hidden; margin-bottom:1.6rem; }
+  .signoff .bars i { flex:1; }
+  .signoff .eot {
+    font-family:"IBM Plex Mono",monospace; font-size:.72rem; letter-spacing:.32em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:.9rem;
+  }
+  .signoff .who {
+    font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;
+    font-size:var(--step-1); font-weight:600; color:var(--ink); margin-bottom:.35rem;
+  }
+  .signoff .who a { color:var(--signal); text-decoration:none; }
+
+  .themebtn {
+    position:fixed; top:1rem; right:1rem; z-index:20; font-family:"IBM Plex Mono",monospace;
+    font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; background:var(--surface);
+    color:var(--muted); border:1px solid var(--rule); border-radius:999px; padding:.45rem .8rem; cursor:pointer; line-height:1;
+  }
+  .themebtn:hover { color:var(--ink); border-color:var(--muted); }
+  .themebtn:focus-visible { outline:2px solid var(--signal); outline-offset:3px; }
+  @media print { .themebtn { display:none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="eyebrow">
+      <span class="dot" aria-hidden="true"></span>
+      <span>Intigriti · September 2026 · Challenge 0926</span>
+    </div>
+    <h1>Critter Gallery</h1>
+    <p class="standfirst">Eight animals, one parameter, and a table the gallery never mentions.
+      Base64 is an encoding, not a filter &mdash; and a single uppercase letter gave away what was behind it.</p>
+
+    <div class="strip" aria-hidden="true">
+      <i>&#129418;</i><i>&#128060;</i><i>&#129409;</i><i>&#128039;</i><i>&#129446;</i><i>&#128040;</i><i>&#129417;</i><i>&#128005;</i>
+    </div>
+    <div class="striplink">
+      <a href="https://challenge-0926.challenges.intigriti.io/challenge.php" target="_blank"
+         rel="noopener noreferrer">challenge&#8209;0926.challenges.intigriti.io</a>
+    </div>
+
+  </header>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 01 · First contact</div>
+    <h2>Eight tiles and a single parameter</h2>
+
+    <p>The page is a grid of eight animal tiles &mdash; fox, panda, lion, penguin, otter, koala, owl, tiger.
+      No login, no forms, no upload, nothing to report. The entire attack surface is in the <code>href</code>
+      of the tiles, and it is the same attribute eight times over.</p>
+
+    <figure class="shot">
+      <img src="images/0.png"
+           alt="Burp Repeater: GET /challenge.php?pic=Zm94 on the left; on the right the rendered detail panel showing an orange fox face, the heading Fox, and the red fox description, above the grid of eight animal tiles">
+      <figcaption><span class="shotnum">Shot 0</span><b>The baseline request.</b>
+        <code>GET /challenge.php?pic=Zm94</code> &mdash; the fox face, the heading <code>Fox</code>, and the
+        matching description, all three agreeing. Remember what this looks like; the entire bug is one
+        screenshot away.</figcaption>
+    </figure>
+
+    <p>Base64 in a URL is worth a second look every single time. It is almost never there for security &mdash;
+      it is there because a developer wanted the parameter to look opaque, or because it was the quickest way
+      to avoid thinking about escaping. Either way it tells you the value is being <em>decoded</em> before it
+      is used, and decoding is the step where assumptions get made.</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>GET /challenge.php</span><span>html</span></div>
+<pre>&lt;a class=<span class="s">"tile"</span> href=<span class="s">"?pic=Zm94"</span>&gt;         <span class="c">&lt;!-- fox     --&gt;</span>
+&lt;a class=<span class="s">"tile"</span> href=<span class="s">"?pic=cGFuZGE="</span>&gt;     <span class="c">&lt;!-- panda   --&gt;</span>
+&lt;a class=<span class="s">"tile"</span> href=<span class="s">"?pic=bGlvbg=="</span>&gt;     <span class="c">&lt;!-- lion    --&gt;</span>
+&lt;a class=<span class="s">"tile"</span> href=<span class="s">"?pic=cGVuZ3Vpbg=="</span>&gt; <span class="c">&lt;!-- penguin --&gt;</span></pre>
+      </div>
+      <figcaption>Decoded, they are just the animal names. So <code>pic</code> takes a name, and I can put
+        any name I like in it.</figcaption>
+    </figure>
+
+    <p>The detail panel that comes back has three distinct parts, and noticing that they are three
+      <em>separate</em> things rather than one block is what the whole challenge turns on:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>the detail panel, structurally</span><span>html</span></div>
+<pre>&lt;div class=<span class="s">"art"</span>&gt;&#129418;&lt;/div&gt;                              <span class="c">&lt;-- picture</span>
+&lt;h2&gt;fox&lt;/h2&gt;                                       <span class="c">&lt;-- name</span>
+&lt;div class=<span class="s">"desc"</span>&gt;The red fox is a clever, highly
+adaptable hunter.&lt;br&gt;&lt;/div&gt;                        <span class="c">&lt;-- description</span></pre>
+      </div>
+    </figure>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 02 · Clearing the board</div>
+    <h2>Everything obvious is already dead</h2>
+
+    <p>Before getting clever, I spent ten minutes proving the easy answers wrong. This is worth doing properly,
+      because every minute spent on a sink that cannot fire is a minute not spent on the one that can.</p>
+
+    <h4>The heading is escaped</h4>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Decoded <code>pic</code></th><th>Rendered</th></tr></thead>
+        <tbody>
+          <tr><td><code>&lt;b&gt;xx&lt;/b&gt;</code></td><td><code>&amp;lt;b&amp;gt;xx&amp;lt;/b&amp;gt;</code></td></tr>
+          <tr><td><code>"&gt;&lt;img src=x onerror=alert(1)&gt;</code></td><td><code>&amp;quot;&amp;gt;&amp;lt;img src=x …</code></td></tr>
+          <tr><td><code>fox&lt;script&gt;alert(1)&lt;/script&gt;</code></td><td><code>fox&amp;lt;script&amp;gt;…</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Every angle bracket comes back as an entity. That is <code>htmlspecialchars()</code> doing its job, and
+      no amount of encoding tricks moves it &mdash; the base64 layer is decoded <em>before</em> the escaping runs,
+      so there is no second parser to desynchronise.</p>
+
+    <h4>There is no file behind it</h4>
+
+    <p>Base64 of <code>../../etc/passwd</code> echoes the path in the heading and produces no description.
+      Same for <code>./fox</code>, <code>fox.txt</code>, <code>fox/../fox</code>. Nothing resolves, so nothing
+      is being opened. Feeding it bytes that are not valid base64 decodes to binary garbage which is echoed
+      as-is &mdash; which tells us the decode is plain, non-strict <code>base64_decode()</code> with no validation
+      performed on the result.</p>
+
+    <div class="note">
+      <span class="lab">Dead end</span>
+      <p>At this point the honest read is that the page has one escaped sink and one lookup that returns
+        a fixed string from a fixed set. That is not a vulnerability. The mistake would be to stop here &mdash;
+        the description lookup had not actually been <em>tested</em>, only <em>used</em>.</p>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 03 · The tell</div>
+    <h2>One uppercase letter</h2>
+
+    <p>I asked for <code>FOX</code> instead of <code>fox</code> &mdash; <code>?pic=Rk9Y</code> &mdash; for no
+      better reason than working through case variants. The response contradicts itself.</p>
+
+    <figure class="shot">
+      <img src="images/1.png"
+           alt="Burp Repeater: GET /challenge.php?pic=Rk9Y renders a generic picture-frame placeholder next to the heading FOX and the correct red fox description">
+      <figcaption><span class="shotnum">Shot 1</span><b>The differential.</b> The picture has fallen back to the
+        generic frame placeholder &mdash; that lookup <b>missed</b>. But the description beside it is the real fox
+        text &mdash; that lookup <b>hit</b>. Two lookups, same string, same request, disagreeing about whether
+        <code>FOX</code> exists.</figcaption>
+    </figure>
+
+    <p>Put it side by side with Shot 0. Same critter, same panel, one letter of difference in the request &mdash;
+      and the fox face has been replaced by an empty frame while the sentence next to it has not changed by a
+      single character. Nothing built on one hardcoded array can produce that. Two separate things went looking
+      for <code>FOX</code>, and only one of them found it.</p>
+
+    <div class="note good">
+      <span class="lab">The whole finding</span>
+      <p>A case-<b>sensitive</b> lookup in PHP is an array key. A case-<b>insensitive</b> one, performed on a
+        string that came from the user, is a <b>database comparison under a <code>_ci</code> collation</b>.
+        The picture is hardcoded. The description is being <em>queried</em>.</p>
+    </div>
+
+    <h4>A second signature, in plain sight</h4>
+
+    <p>Once you are looking for it, there is a corroborating detail that was visible from the very first
+      request. <em>Every</em> description ends in a stray <code>&lt;br&gt;</code>:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>all eight descriptions</span><span>html</span></div>
+<pre>The red fox is a clever, highly adaptable hunter.<span class="bad">&lt;br&gt;</span>
+Giant pandas spend most of the day munching bamboo.<span class="bad">&lt;br&gt;</span>
+Lions are the only truly social of the big cats.<span class="bad">&lt;br&gt;</span>
+Koalas sleep up to twenty hours a day.<span class="bad">&lt;br&gt;</span></pre>
+      </div>
+      <figcaption>A trailing <code>&lt;br&gt;</code> on every row is <code>nl2br()</code> converting a trailing
+        newline in <b>stored</b> text &mdash; the fingerprint of data pulled out of a store, not a literal in source.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 04 · Break it</div>
+    <h2>A single quote takes the page down</h2>
+
+    <p>If there is a query, a stray quote should break it. Base64 of <code>fox'</code> is
+      <code>Zm94Jw==</code>.</p>
+
+    <figure class="shot">
+      <img src="images/2.png"
+           alt="Burp Repeater: GET /challenge.php?pic=Zm94Jw%3D%3D returns HTTP/2 200 OK with response headers and a completely empty body; the Render tab is greyed out">
+      <figcaption><span class="shotnum">Shot 2</span><b>Broken.</b> Still <code>HTTP/2 200 OK</code>, still
+        <code>X-Powered-By: PHP/8.2.33</code> &mdash; but the body is <b>completely empty</b>. Not an error page,
+        not a missing description: nothing at all. The Render tab has greyed out because there is no document
+        to render.</figcaption>
+    </figure>
+
+    <p>This is more informative than an error message would have been. PHP died partway through building the
+      page and returned what it had, which was nothing. A quote in a value that is only ever printed cannot do
+      that. A quote in a value that is <em>concatenated into a query</em> does exactly that.</p>
+
+    <p>Worth noting for anyone reproducing: the response is still <code>200</code>. If you were grepping for
+      a non-200 status to find the injection you would have walked straight past it.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 05 · Repair it</div>
+    <h2>A comment puts it back together</h2>
+
+    <p>If a quote broke the statement, a comment should fix it by swallowing whatever the application appends
+      after my input. Base64 of <code>fox'-- </code> is <code>Zm94Jy0tIA==</code>.</p>
+
+    <figure class="shot">
+      <img src="images/3.png"
+           alt="Burp Repeater: GET /challenge.php?pic=Zm94Jy0tIA%3D%3D renders the heading Fox'-- with the correct red fox description restored">
+      <figcaption><span class="shotnum">Shot 3</span><b>Repaired.</b> The heading now reads
+        <code>Fox'--</code> &mdash; my raw input, echoed and escaped &mdash; and the fox description is
+        <b>back</b>. The page rebuilt itself because the trailing quote is now inside a comment.</figcaption>
+    </figure>
+
+    <div class="note">
+      <span class="lab">Mind the space</span>
+      <p>MySQL requires whitespace <em>after</em> the <code>--</code> comment marker. The trailing space in
+        <code>fox'-- </code> is load-bearing. It survives base64 intact, but it is the single easiest thing to
+        lose when editing payloads by hand &mdash; and losing it turns a working injection into a silent failure
+        that looks exactly like Shot 2, which looks exactly like "there is no bug here".</p>
+    </div>
+
+    <p>Break, then repair. Two requests, and the shape of the statement is no longer a guess.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 06 · Widen it</div>
+    <h2>The tautology that empties the table</h2>
+
+    <p>The third request in the sequence proves I am inside a <code>WHERE</code> clause rather than somewhere
+      harmless. Base64 of <code>fox' OR '1'='1</code> is <code>Zm94JyBPUiAnMSc9JzE=</code>.</p>
+
+    <figure class="shot">
+      <img src="images/4.png"
+           alt="Burp Repeater: the payload fox' OR '1'='1 renders all eight critter descriptions stacked in a single detail panel">
+      <figcaption><span class="shotnum">Shot 4</span><b>Widened.</b> <em>All eight</em> descriptions, stacked in
+        one panel &mdash; fox, panda, lion, penguin, otter, koala, owl, tiger. The condition is now always true,
+        so every row in the table matches, and the page loops over every row it is handed.</figcaption>
+    </figure>
+
+    <p>That completes the triplet, and it is not circumstantial:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Decoded <code>pic</code></th><th><code>pic</code> value</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td><code>fox'</code></td><td><code>Zm94Jw==</code></td><td><span class="tag hi">broken</span> empty body</td></tr>
+          <tr><td><code>fox'-- </code></td><td><code>Zm94Jy0tIA==</code></td><td><span class="tag md">repaired</span> fox returns</td></tr>
+          <tr><td><code>fox' OR '1'='1</code></td><td><code>Zm94JyBPUiAnMSc9JzE=</code></td><td><span class="tag md">widened</span> all eight rows</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>A single quote <em>breaks</em> the statement; a SQL comment <em>repairs</em> it; a boolean tautology
+      <em>widens</em> the result set. The statement underneath is:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>the statement, reconstructed</span><span>sql</span></div>
+<pre><span class="k">SELECT</span> description <span class="k">FROM</span> animals <span class="k">WHERE</span> name = <span class="s">'&lt;decoded pic&gt;'</span></pre>
+      </div>
+    </figure>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 07 · Shape</div>
+    <h2>One column, and it renders</h2>
+
+    <p>To use <code>UNION</code> I need the column count of the original <code>SELECT</code>.
+      <code>ORDER BY 1</code> works and <code>ORDER BY 2</code> breaks, which says one column. Confirming it
+      with a union &mdash; base64 of <code>zz' UNION SELECT 1-- </code> &mdash; also answers a second question:
+      does my value actually reach the page?</p>
+
+    <figure class="shot">
+      <img src="images/5.png"
+           alt="Burp Repeater: the payload zz' UNION SELECT 1-- renders a literal 1 in the description area of the detail panel">
+      <figcaption><span class="shotnum">Shot 5</span><b>One column, and it is mine.</b> The description area now
+        reads simply <code>1</code> &mdash; a value that exists nowhere in the application, chosen by me, rendered
+        into the page. <code>zz</code> is a deliberately non-existent critter, so the only row returned is the
+        one I injected.</figcaption>
+    </figure>
+
+    <p>From here the vulnerability is no longer "can I break the query". It is "what would I like the database
+      to tell me". Everything after this is bookkeeping.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 08 · Fingerprint</div>
+    <h2>Which engine am I talking to</h2>
+
+    <p>Different engines expose their metadata in incompatible ways, so before enumerating anything I need to
+      know which one this is. <code>sqlite_version()</code> errors; <code>@@version</code> answers.</p>
+
+    <figure class="shot">
+      <img src="images/6.png"
+           alt="Burp Repeater: the payload zz' UNION SELECT @@version-- renders the string 8.0.46 in the description area">
+      <figcaption><span class="shotnum">Shot 6</span><b>MySQL 8.0.46.</b> The database is reading my injected
+        expression and printing its own version number back into a page about woodland animals.</figcaption>
+    </figure>
+
+    <p>MySQL means <code>information_schema</code> is available, which means the database will describe its own
+      structure to me on request. It also retroactively explains Step 03: MySQL's default collations are
+      case-insensitive, which is exactly why <code>FOX</code> matched <code>fox</code> while the PHP array
+      did not.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 09 · The schema</div>
+    <h2>A table the gallery never mentions</h2>
+
+    <p>Now I ask the database what tables it holds in the current schema.</p>
+
+    <figure class="shot">
+      <img src="images/7.png"
+           alt="Burp Repeater: a group_concat over information_schema.tables renders the text animals,secret_vault">
+      <figcaption><span class="shotnum">Shot 7</span><b>Two tables.</b> <code>animals,secret_vault</code>.
+        The gallery only ever reads the first one. There is no link, no parameter and no markup anywhere in the
+        application that references the second.</figcaption>
+    </figure>
+
+    <p>I used <code>group_concat()</code> deliberately. The page renders one column but happily prints a long
+      string, so collapsing an entire result set into a single comma-separated value turns what would have been
+      a row-by-row extraction into one request.</p>
+
+    <p>Next, the columns &mdash; I need a field name before I can select anything out of that second table.</p>
+
+    <figure class="shot">
+      <img src="images/8.png"
+           alt="Burp Repeater: a group_concat over information_schema.columns renders animals.id, animals.name, animals.description, secret_vault.id and secret_vault.note">
+      <figcaption><span class="shotnum">Shot 8</span><b>The full column list.</b>
+        <code>animals.id, animals.name, animals.description, secret_vault.id, secret_vault.note</code>.
+        There it is: <code>secret_vault.note</code>.</figcaption>
+    </figure>
+
+    <p>This is the part worth pausing on outside of a challenge context. <code>secret_vault</code> was never
+      meant to be reachable from the web tier at all &mdash; and the injection does not care, because the database
+      user holding the connection was granted <code>SELECT</code> across the whole schema.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <div class="reveal">
+    <div class="ch">Step 10 · The vault</div>
+    <h2>Reading the table nothing links to</h2>
+
+    <p>Nine requests to understand the machinery. The tenth just asks it a question.</p>
+
+    <figure class="shot">
+      <img src="images/9.png"
+           alt="Burp Repeater: the payload zz' UNION SELECT note FROM secret_vault-- renders the flag INTIGRITI{01a09f56-74a2-700b-a849-ffe6742327b2} in the detail panel">
+      <figcaption><span class="shotnum">Shot 9</span><b>The vault, read.</b>
+        <code>zz' UNION SELECT note FROM secret_vault-- </code> &mdash; and the gallery renders the flag in the
+        space where a fact about foxes is supposed to go.</figcaption>
+    </figure>
+
+    <div class="vault">
+      <div class="osd">SECRET_VAULT · ROW 1</div>
+      <div class="flag">INTIGRITI{01a09f56-74a2-700b-a849-ffe6742327b2}<span class="caret" aria-hidden="true"></span></div>
+    </div>
+  </div>
+
+
+  <div class="signoff">
+    <div class="bars" aria-hidden="true">
+      <i style="background:#B8B8B8"></i><i style="background:#B8B821"></i>
+      <i style="background:#21B8B8"></i><i style="background:#21B821"></i>
+      <i style="background:#B821B8"></i><i style="background:#B82121"></i>
+      <i style="background:#2121B8"></i>
+    </div>
+    <div class="eot">End of transmission</div>
+    <p class="who"><a href="https://github.com/romilp619">Romil Patel</a></p>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  try {
+    var saved = localStorage.getItem('theme');
+    if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
+  } catch (e) {}
+  var btn = document.createElement('button');
+  btn.className = 'themebtn';
+  btn.type = 'button';
+  btn.setAttribute('aria-label', 'Toggle colour theme');
+  btn.textContent = 'Theme';
+  btn.addEventListener('click', function () {
+    var isDark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = isDark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch (e) {}
+  });
+  document.body.appendChild(btn);
+
+  var vault = document.querySelector('.vault');
+  if (vault && 'IntersectionObserver' in window) {
+    vault.classList.add('warming');
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { vault.classList.add('lit'); io.disconnect(); }
+      });
+    }, { threshold: .4 });
+    io.observe(vault);
+  }
+})();
+</script>
+</body>
+</html>
