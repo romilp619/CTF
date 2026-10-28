@@ -511,33 +511,6 @@ server: istio-envoy
     </div>
   </div>
 
-  <!-- ============================================ -->
-  <section>
-    <div class="ch">One more thing</div>
-    <h2>The same endpoint also kills the shop</h2>
-
-    <p>A separate defect, found while fuzzing the coupon field. Sending a <strong>non-string</strong>
-      <code>code</code> crashes the application outright:</p>
-
-    <figure>
-      <div class="screen">
-        <div class="screen-bar"><span>POST /api/cart/coupon</span><span>503</span></div>
-<pre>{<span class="s">"code"</span>: [<span class="s">"NIGHT20"</span>]}   {<span class="s">"code"</span>: 20}   {<span class="s">"code"</span>: null}   {<span class="s">"code"</span>: {<span class="s">"a"</span>:1}}
-
-<span class="bad">HTTP/2 503
-upstream connect error or disconnect/reset before headers.
-reset reason: connection termination</span></pre>
-      </div>
-      <figcaption>The normaliser calls a string method on attacker-controlled JSON with no type check.
-        The exception is unhandled and the worker dies.</figcaption>
-    </figure>
-
-    <p>Sessions are held in memory, so every crash <strong>wipes every shopper's cart</strong> and
-      the next request comes back <code>session_required</code>. One request, repeated, keeps the
-      shop down. I confirmed it once and left it alone after that, mostly because it kept knocking
-      over my own testing.</p>
-  </section>
-
   <div class="signoff">
     <div class="bars" aria-hidden="true">
       <i style="background:#FF7A1A"></i><i style="background:#FFB547"></i>
