@@ -107,6 +107,60 @@
   }
   .film video { display:block; width:100%; height:100%; object-fit:cover; background:#030A0F; }
 
+  /* ---------- diagrams ---------- */
+  .fig { margin:1.9rem 0 1.2rem; }
+  .fig .frame {
+    border:1px solid var(--rule); border-radius:10px; background:var(--surface);
+    padding:.7rem .8rem; box-shadow:var(--shadow);
+  }
+  .fig.is-motion .frame { cursor:pointer; }
+  .fig .rule { font-size:var(--step--1); color:var(--muted); margin:.55rem 0 0; }
+  .fig .rule b { color:var(--ink-2); font-weight:600; }
+  .diagram { display:block; width:100%; height:auto; }
+  .diagram text { font-family:"IBM Plex Mono",monospace; fill:var(--muted); }
+  .diagram .t-md { font-size:21px; }
+  .diagram .t-sm { font-size:17px; }
+  .diagram .t-xs { font-size:14px; letter-spacing:.08em; }
+  .diagram .mid  { text-anchor:middle; }
+  .diagram .end  { text-anchor:end; }
+  .diagram .ink  { fill:var(--ink); }
+  .diagram .cy   { fill:var(--signal); }
+  .diagram .rd   { fill:var(--loss); }
+  .diagram .am   { fill:var(--amber); }
+  .diagram .gr   { fill:var(--win); }
+  .diagram .panel   { fill:var(--surface-2); }
+  .diagram .panel-cy{ fill:var(--signal-dim); }
+  .diagram .panel-rd{ fill:var(--loss-dim); }
+  .diagram .fill-cy { fill:var(--signal); }
+  .diagram .fill-rd { fill:var(--loss); }
+  .diagram .on-cy   { fill:var(--on-signal); }
+  .diagram .on-rd   { fill:var(--on-loss); }
+  .diagram .s-rule { stroke:var(--rule);   fill:none; stroke-width:2; }
+  .diagram .s-mut  { stroke:var(--muted);  fill:none; stroke-width:2; }
+  .diagram .s-cy   { stroke:var(--signal); fill:none; stroke-width:2.5; }
+  .diagram .s-rd   { stroke:var(--loss);   fill:none; stroke-width:2.5; }
+  .diagram .s-am   { stroke:var(--amber);  fill:none; stroke-width:2.5; }
+  .diagram .s-gr   { stroke:var(--win);    fill:none; stroke-width:2.5; }
+  .diagram .dash   { stroke-dasharray:7 7; }
+
+  /* steps wait out of sight until the figure scrolls in; click replays */
+  .diagram [data-at] { transform-box:fill-box; transform-origin:50% 50%; }
+  .diagram .m-grow   { transform-origin:0% 50%; }
+  .js-motion .is-motion:not(.is-playing) [data-at] { opacity:0; }
+  .js-motion .is-playing .m-fade  { animation:d-fade  .5s ease both; }
+  .js-motion .is-playing .m-pop   { animation:d-pop   .45s cubic-bezier(.2,.8,.3,1.2) both; }
+  .js-motion .is-playing .m-slide { animation:d-slide .4s ease-out both; }
+  .js-motion .is-playing .m-grow  { animation:d-grow  .55s cubic-bezier(.3,.7,.2,1) both; }
+  .js-motion .is-playing .m-flow  { animation:d-flow  .6s linear infinite; }
+  @keyframes d-fade  { from { opacity:0; } }
+  @keyframes d-pop   { from { opacity:0; transform:scale(.93); } }
+  @keyframes d-slide { from { opacity:0; transform:translateX(-18px); } }
+  @keyframes d-grow  { from { transform:scaleX(0); } }
+  @keyframes d-flow  { to   { stroke-dashoffset:-14; } }
+  @media (prefers-reduced-motion: reduce) {
+    .diagram [data-at] { opacity:1 !important; animation:none !important; }
+  }
+
   section { padding:3.2rem 0 0; }
   .ch {
     display:flex; align-items:baseline; gap:.8rem; font-family:"IBM Plex Mono",monospace;
@@ -150,30 +204,16 @@
   .tag { display:inline-block; font-size:.66rem; letter-spacing:.1em; text-transform:uppercase; padding:.18em .5em; border-radius:3px; white-space:nowrap; }
   .tag.no { background:var(--loss-dim); color:var(--loss); }
   .tag.yes { background:var(--signal-dim); color:var(--signal); }
-
-  /* ---------- the accumulator map ---------- */
-  .mapwrap { overflow-x:auto; margin:1.6rem 0 .4rem; }
-  .memmap { min-width:540px; display:grid; grid-template-columns:396fr 424fr 256fr 424fr; gap:.3rem 3px; }
-  .memmap .blk {
-    border-radius:4px; padding:.55rem .5rem; text-align:center; min-width:0;
-    font-family:"IBM Plex Mono",monospace; border:1px solid var(--rule); background:var(--surface);
+  ol.ranked { counter-reset:r; list-style:none; padding-left:0; margin:1.1rem 0; }
+  ol.ranked li { counter-increment:r; position:relative; padding-left:2.4rem; margin-bottom:.75rem; }
+  ol.ranked li::before {
+    content:counter(r); position:absolute; left:0; top:.12em;
+    width:1.6rem; height:1.6rem; border-radius:50%;
+    background:var(--signal-dim); color:var(--signal);
+    font-family:"IBM Plex Mono",monospace; font-size:.8rem; font-weight:600;
+    display:flex; align-items:center; justify-content:center;
   }
-  .memmap .blk b { display:block; font-size:.74rem; font-weight:600; letter-spacing:.06em; color:var(--ink); }
-  .memmap .blk span { display:block; font-size:.62rem; color:var(--muted); margin-top:.15rem; }
-  .memmap .blk.code { border-color:var(--signal); background:var(--signal-dim); }
-  .memmap .blk.sig  { border-color:var(--amber); }
-  .memmap .blk.evil { border-color:var(--loss); background:var(--loss-dim); }
-  .memmap .blk.evil b { color:var(--loss); }
-
-  .memmap .band { border-radius:3px; padding:.3rem .5rem; font-family:"IBM Plex Mono",monospace;
-    font-size:.62rem; letter-spacing:.1em; text-transform:uppercase; text-align:center; min-width:0;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .memmap .band.hash { background:var(--signal); color:var(--on-signal); }
-  .memmap .band.gap  { color:var(--muted); }
-  .memmap .band.exec { background:var(--loss); color:var(--on-loss); }
-  .memmap .band.void { }
-  .memmap .tick { font-family:"IBM Plex Mono",monospace; font-size:.6rem; color:var(--muted); text-align:left; min-width:0; }
-  .memmap .tick::before { content:"\251D"; margin-right:.25em; opacity:.55; }
+  code.bad-tok { background:var(--loss-dim); color:var(--loss); font-weight:600; }
 
   .frames { margin:1.6rem 0; display:grid; gap:.5rem; }
   .frm {
@@ -225,6 +265,29 @@
   @media (prefers-reduced-motion: reduce) { .caret { animation:none; } }
 
   .wrap > section:last-of-type { padding-bottom:4rem; }
+
+  .readnext { margin:3.4rem 0 0; padding-top:2rem; border-top:1px solid var(--rule); }
+  .rn-head {
+    font-family:"IBM Plex Mono",monospace; font-size:.72rem; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:1rem;
+  }
+  .rn-grid { display:grid; gap:.8rem; grid-template-columns:1fr 1fr; }
+  @media (max-width:680px) { .rn-grid { grid-template-columns:1fr; } }
+  .rn {
+    display:block; text-decoration:none; color:inherit;
+    background:var(--surface); border:1px solid var(--rule); border-left:3px solid var(--signal);
+    border-radius:6px; padding:.9rem 1rem; transition:transform .12s ease;
+  }
+  .rn:hover { transform:translateY(-2px); }
+  .rn:focus-visible { outline:2px solid var(--signal); outline-offset:3px; }
+  .rn-meta {
+    display:block; font-family:"IBM Plex Mono",monospace; font-size:.62rem;
+    letter-spacing:.16em; text-transform:uppercase; color:var(--muted);
+  }
+  .rn-title { display:block; font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;
+    font-size:var(--step-1); font-weight:600; color:var(--ink); margin:.3rem 0 .25rem; }
+  .rn-note { display:block; font-size:var(--step--1); color:var(--ink-2); }
+  .rn-all { margin:1rem 0 0; font-size:var(--step--1); }
 
   .signoff { margin:3.2rem 0 4.5rem; text-align:center; }
   .signoff .bars { display:flex; height:22px; border-radius:3px; overflow:hidden; margin-bottom:1.5rem; }
@@ -383,6 +446,46 @@ read(fd, out, 0x2000);           <span class="c">// one read, returned to you ve
 
     <p>So the whole protocol is reachable in one POST, and the reply comes back in the response body.
       No tunnel, no callback, no second channel.</p>
+
+  <figure class="fig is-motion">
+    <div class="frame">
+      <svg class="diagram" viewBox="0 0 1200 330" role="img"
+        aria-label="The public HTTP server on port 8080 takes a POST to /custom_protocol, opens a socket to the custom protocol service on 127.0.0.1 port 5001, forwards the request body unchanged, sleeps two seconds, performs one read and returns that reply verbatim.">
+        <g class="m-fade" data-at="0">
+          <text x="600" y="44" class="t-xs mid">ONE POST, STRAIGHT THROUGH TO A LOOPBACK SERVICE</text>
+        </g>
+
+        <g class="m-pop" data-at="0.25">
+          <rect x="60" y="96" width="300" height="104" rx="10" class="panel"/>
+          <rect x="60" y="96" width="300" height="104" rx="10" class="s-cy"/>
+          <text x="210" y="140" class="t-md mid cy">public :8080</text>
+          <text x="210" y="172" class="t-sm mid">HTTP, reachable</text>
+        </g>
+
+        <g class="m-slide" data-at="0.55">
+          <line x1="382" y1="148" x2="806" y2="148" class="s-cy dash m-flow"/>
+          <path d="M818,148 L800,155 M818,148 L800,141" class="s-cy"/>
+          <text x="600" y="126" class="t-sm mid ink">POST /custom_protocol</text>
+          <text x="600" y="184" class="t-xs mid">body forwarded unchanged</text>
+        </g>
+
+        <g class="m-pop" data-at="0.85">
+          <rect x="840" y="96" width="300" height="104" rx="10" class="panel"/>
+          <rect x="840" y="96" width="300" height="104" rx="10" class="s-am"/>
+          <text x="990" y="140" class="t-md mid am">127.0.0.1:5001</text>
+          <text x="990" y="172" class="t-sm mid">custom protocol</text>
+        </g>
+
+        <g class="m-fade" data-at="1.15">
+          <path d="M990,214 L990,262 L210,262 L210,222" class="s-mut"/>
+          <path d="M210,210 L203,228 M210,210 L217,228" class="s-mut"/>
+          <text x="600" y="294" class="t-sm mid">sleep(2) &#183; one read of 0x2000 &#183; returned to you verbatim</text>
+        </g>
+      </svg>
+    </div>
+    <p class="rule"><b>A bind address is not a boundary.</b> The service answers only on loopback,
+      and would pass a network review on that basis. One route hands it attacker bytes anyway.</p>
+  </figure>
   </section>
 
   <!-- ============================================ -->
@@ -554,24 +657,86 @@ n = rsa_verify(&amp;e, modulus, 2048, acc + sig_off, recovered);
       data_len</code> is unchanged, so the hashed window is the same 820 bytes it always was and
       still holds the original code and data. Same digest. Same signature. Different pointer.</p>
 
-    <div class="mapwrap">
-      <div class="memmap">
-        <div class="blk code" style="grid-row:1;grid-column:1"><b>CODE</b><span>396 B</span></div>
-        <div class="blk"      style="grid-row:1;grid-column:2"><b>DATA</b><span>424 B</span></div>
-        <div class="blk sig"  style="grid-row:1;grid-column:3"><b>SIGN</b><span>256 B</span></div>
-        <div class="blk evil" style="grid-row:1;grid-column:4"><b>DATA&prime;</b><span>424 B</span></div>
+  <figure class="fig is-motion">
+    <div class="frame">
+      <svg class="diagram" viewBox="0 0 1200 486" role="img"
+        aria-label="Two states of the 0x2000-byte accumulator. As signed: CODE at offset 0, DATA at 396, SIGN at 820; the digest covers the first 820 bytes and execution starts at the DATA block. As sent: a second DATA frame of the same length is appended at offset 1076; the signed window is unchanged, but execution now starts at the appended block, which the signature never covered.">
 
-        <div class="band hash" style="grid-row:2;grid-column:1 / 3">signed &mdash; 820 bytes</div>
-        <div class="band exec" style="grid-row:3;grid-column:4">executed</div>
+        <g class="m-fade" data-at="0">
+          <text x="60" y="34" class="t-xs">AS SIGNED</text>
+          <line x1="190" y1="28" x2="1140" y2="28" class="s-rule"/>
+        </g>
+        <g class="m-pop" data-at="0.2">
+          <rect x="60" y="56" width="282" height="74" rx="9" class="panel-cy"/>
+          <rect x="60" y="56" width="282" height="74" rx="9" class="s-cy"/>
+          <text x="201" y="92" class="t-md mid ink">CODE</text>
+          <text x="201" y="117" class="t-sm mid">396 B</text>
+        </g>
+        <g class="m-pop" data-at="0.35">
+          <rect x="346" y="56" width="302" height="74" rx="9" class="panel"/>
+          <rect x="346" y="56" width="302" height="74" rx="9" class="s-rule"/>
+          <text x="497" y="92" class="t-md mid ink">DATA</text>
+          <text x="497" y="117" class="t-sm mid">424 B</text>
+        </g>
+        <g class="m-pop" data-at="0.5">
+          <rect x="652" y="56" width="182" height="74" rx="9" class="panel"/>
+          <rect x="652" y="56" width="182" height="74" rx="9" class="s-am"/>
+          <text x="743" y="92" class="t-md mid ink">SIGN</text>
+          <text x="743" y="117" class="t-sm mid">256 B</text>
+        </g>
+        <g class="m-grow" data-at="0.7">
+          <rect x="60" y="142" width="588" height="28" rx="6" class="fill-cy"/>
+          <text x="354" y="162" class="t-xs mid on-cy">SIGNED &#8212; 820 BYTES</text>
+        </g>
+        <g class="m-pop" data-at="0.9">
+          <rect x="346" y="178" width="302" height="28" rx="6" class="fill-rd"/>
+          <text x="497" y="198" class="t-xs mid on-rd">EXECUTED</text>
+        </g>
 
-        <span class="tick" style="grid-row:4;grid-column:1">0</span>
-        <span class="tick" style="grid-row:4;grid-column:2">396</span>
-        <span class="tick" style="grid-row:4;grid-column:3">820</span>
-        <span class="tick" style="grid-row:4;grid-column:4">1076</span>
-      </div>
+        <g class="m-fade" data-at="1.1">
+          <line x1="60" y1="240" x2="1140" y2="240" class="s-rule dash"/>
+          <text x="60" y="286" class="t-xs rd">AS SENT</text>
+          <line x1="182" y1="280" x2="1140" y2="280" class="s-rule"/>
+        </g>
+        <g class="m-fade" data-at="1.2">
+          <rect x="60" y="308" width="282" height="74" rx="9" class="panel-cy"/>
+          <rect x="60" y="308" width="282" height="74" rx="9" class="s-cy"/>
+          <text x="201" y="344" class="t-md mid ink">CODE</text>
+          <text x="201" y="369" class="t-sm mid">396 B</text>
+          <rect x="346" y="308" width="302" height="74" rx="9" class="panel"/>
+          <rect x="346" y="308" width="302" height="74" rx="9" class="s-rule"/>
+          <text x="497" y="344" class="t-md mid ink">DATA</text>
+          <text x="497" y="369" class="t-sm mid">424 B</text>
+          <rect x="652" y="308" width="182" height="74" rx="9" class="panel"/>
+          <rect x="652" y="308" width="182" height="74" rx="9" class="s-am"/>
+          <text x="743" y="344" class="t-md mid ink">SIGN</text>
+          <text x="743" y="369" class="t-sm mid">256 B</text>
+        </g>
+        <g class="m-pop" data-at="1.35">
+          <rect x="838" y="308" width="302" height="74" rx="9" class="panel-rd"/>
+          <rect x="838" y="308" width="302" height="74" rx="9" class="s-rd"/>
+          <text x="989" y="344" class="t-md mid rd">DATA&#8242;</text>
+          <text x="989" y="369" class="t-sm mid">424 B</text>
+        </g>
+        <g class="m-grow" data-at="1.5">
+          <rect x="60" y="394" width="588" height="28" rx="6" class="fill-cy"/>
+          <text x="354" y="414" class="t-xs mid on-cy">SIGNED &#8212; STILL 820 BYTES</text>
+        </g>
+        <g class="m-pop" data-at="1.65">
+          <rect x="838" y="430" width="302" height="28" rx="6" class="fill-rd"/>
+          <text x="989" y="450" class="t-xs mid on-rd">EXECUTED</text>
+        </g>
+        <g class="m-fade" data-at="1.8">
+          <text x="60" y="478" class="t-xs">&#9501; 0</text>
+          <text x="346" y="478" class="t-xs">&#9501; 396</text>
+          <text x="652" y="478" class="t-xs">&#9501; 820</text>
+          <text x="838" y="478" class="t-xs rd">&#9501; 1076</text>
+        </g>
+      </svg>
     </div>
-    <p style="font-size:var(--step--1);color:var(--muted);margin-top:0">The upper band is what the
-      signature vouches for. The lower band is what the CPU is handed. They never overlap.</p>
+    <p class="rule"><b>The digest reads one address. The jump reads another.</b> Nothing in the
+      handler requires them to describe the same memory, and the accumulator only moves forward.</p>
+  </figure>
 
     <div class="note">
       <span class="lab">Root cause</span>
@@ -615,6 +780,47 @@ cell index = (-0x60) - (-0x160) = <span class="ok">0x100</span> = <span class="o
       <figcaption>The tape overlaps the secret. No write, no corruption, no escape needed &mdash;
         just walk right and read.</figcaption>
     </figure>
+<figure class="fig is-motion">
+    <div class="frame">
+      <svg class="diagram" viewBox="0 0 1200 290" role="img"
+        aria-label="The interpreter tape starts at fs minus 0x160 and the flag was loaded to fs minus 0x60, so the flag begins 256 cells along the tape. Walking the pointer right 256 times lands on the first flag byte; the next 81 cells are the flag itself.">
+        <g class="m-fade" data-at="0">
+          <text x="600" y="40" class="t-xs mid">THE TAPE THE SIGNED INTERPRETER IS HANDED</text>
+        </g>
+
+        <g class="m-grow" data-at="0.3">
+          <rect x="80" y="120" width="756" height="54" rx="7" class="panel"/>
+          <rect x="80" y="120" width="756" height="54" rx="7" class="s-rule"/>
+        </g>
+        <g class="m-grow" data-at="0.85">
+          <rect x="836" y="120" width="240" height="54" rx="7" class="panel"/>
+          <rect x="836" y="120" width="240" height="54" rx="7" class="s-gr"/>
+        </g>
+
+        <g class="m-fade" data-at="0.55">
+          <path d="M80,104 L80,88 L836,88 L836,104" class="s-cy"/>
+          <text x="458" y="74" class="t-sm mid cy">&#62; &#215; 256</text>
+        </g>
+        <g class="m-fade" data-at="1.15">
+          <path d="M836,104 L836,88 L1076,88 L1076,104" class="s-gr"/>
+          <text x="956" y="74" class="t-sm mid gr">.&#62; &#215; 81</text>
+        </g>
+
+        <g class="m-fade" data-at="1.4">
+          <text x="80" y="208" class="t-sm">fs:-0x160</text>
+          <text x="80" y="232" class="t-xs">tape base &#183; cell 0</text>
+          <text x="956" y="208" class="t-sm mid gr">fs:-0x60 &#183; cell 256</text>
+          <text x="956" y="232" class="t-xs mid">the flag, 81 bytes</text>
+        </g>
+        <g class="m-fade" data-at="1.7">
+          <text x="600" y="276" class="t-xs mid">(-0x60) &#8722; (-0x160) = 0x100 = 256</text>
+        </g>
+      </svg>
+    </div>
+    <p class="rule"><b>No write, no corruption, no escape.</b> The tape simply overlaps a secret the
+      thread had already loaded, so reading it is the interpreter working exactly as designed.</p>
+  </figure>
+
 
     <figure>
       <div class="screen">
@@ -683,9 +889,58 @@ ACK ACK ACK ACK ACK
     </figure>
   </section>
 
+<!-- ============================================ -->
+  <section>
+    <div class="ch">Step 09 &middot; What does not work</div>
+    <h2>Five ways to get this wrong</h2>
+
+    <p>The chain looks loose enough that you might expect it to tolerate changes. It does not. Every
+      one of these is a real response from the live instance, and each failure names the exact check
+      that caught it:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>What I sent</th><th>Reply</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>The <code>-HELP</code> blob replayed byte for byte</td>
+            <td><code class="bad-tok">NAKH</code> &times; many</td>
+            <td>its length field counts the 4 command bytes, the server's does not. The framing desyncs on the first frame and never recovers</td>
+          </tr>
+          <tr>
+            <td>Swapped <code>DATA</code>, 8 bytes shorter</td>
+            <td><code class="bad-tok">NAKR</code></td>
+            <td><code>data_len</code> shrinks, so <code>code_len + data_len</code> shrinks, so the hashed window is no longer 820 bytes. Different digest, signature rejected</td>
+          </tr>
+          <tr>
+            <td>Re-sending <code>CODE</code> after <code>SIGN</code></td>
+            <td><code class="bad-tok">NAKR</code></td>
+            <td>that moves <code>code_off</code> to the new offset, so the digest is taken over a completely different region</td>
+          </tr>
+          <tr>
+            <td>Swapped <code>DATA</code> with no <code>CODE</code> frame</td>
+            <td><code class="bad-tok">NAKC</code></td>
+            <td><code>code_off</code> is still <code>-1</code>. There is nothing to jump to</td>
+          </tr>
+          <tr>
+            <td>No <code>SIGN</code> frame at all</td>
+            <td><code class="bad-tok">NAKS</code></td>
+            <td>checked first, before anything is hashed</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>That is the part worth sitting with. The bounds are checked, the ordering is checked, the
+      length arithmetic is honoured, and the signature is compared against a real digest every single
+      time. <strong>The chain is only exploitable in exactly one shape</strong> &mdash; same length,
+      after the signature, appended rather than overwritten &mdash; and the server defends every
+      shape but that one.</p>
+  </section>
+
   <!-- ============================================ -->
   <section>
-    <div class="ch">Step 09 &middot; The fix</div>
+    <div class="ch">Step 10 &middot; The fix</div>
     <h2>Hash the buffer you are about to use</h2>
 
     <p>The verifier and the executor are allowed to disagree about what the signature covers. Close
@@ -718,22 +973,28 @@ if (verify(digest, sig))
       <code>data_off != code_off + code_len</code>. The better fix is to make the two impossible to
       separate, by carrying one signed object instead of three loose offsets.</p>
 
-    <p>Three things would also have blunted it independently:</p>
+    <p>Four things would each have blunted it independently, in the order I would ship them:</p>
 
-    <ul>
-      <li><strong>Freeze the session on <code>SIGN</code>.</strong> There is no legitimate reason to
+    <ol class="ranked">
+      <li><strong>Carry one signed object, not three loose offsets.</strong> If the buffer that is
+        hashed and the buffer that runs are the same pointer, the bug cannot be expressed.</li>
+      <li><strong>Freeze the session on <code>SIGN</code>.</strong> Reject any further
+        <code>CODE</code> or <code>DATA</code> frame outright. There is no legitimate reason to
         append to a signed transaction.</li>
       <li><strong>Do not load the secret into the thread that runs attacker code.</strong> The flag
-        is read into TLS before the first byte arrives, so <em>any</em> execution primitive in that
-        thread discloses it.</li>
+        is read into thread-local storage before the first byte of the first frame arrives, so
+        <em>any</em> execution primitive in that thread discloses it, whatever the payload is.</li>
       <li><strong>Do not hand a signed interpreter a tape that aliases your own memory.</strong> A
-        bounded, zero-filled tape would have made the payload inert even after the bypass.</li>
-    </ul>
+        bounded, zero-filled tape would have made the payload inert even after the bypass landed.</li>
+    </ol>
+
+    <p>If only one of those could ship, it is number 3. The first two close this bug; the third
+      means the next one in that thread is worth nothing.</p>
   </section>
 
   <!-- ============================================ -->
   <section>
-    <div class="ch">Step 10 &middot; Also in the room</div>
+    <div class="ch">Step 11 &middot; Also in the room</div>
     <h2>Two smaller doors, left open</h2>
 
     <p>File reads are confined to the working directory by <code>basename()</code>. Directory
@@ -774,6 +1035,23 @@ run sbin srv sys tmp usr var <span class="w">the_real.flag</span> app <span clas
     </div>
   </div>
 
+  <nav class="readnext" aria-label="More write-ups">
+    <div class="rn-head">Read next</div>
+    <div class="rn-grid">
+      <a class="rn" href="../Intigriti-1026-Halloween-Store/">
+        <span class="rn-meta">Challenge 1026 &middot; October 2026</span>
+        <span class="rn-title">The coupon that never runs out</span>
+        <span class="rn-note">A duplicate check that only ever looks at the last promotion applied.</span>
+      </a>
+      <a class="rn" href="../Intigriti-0726-Canonically-Yours/">
+        <span class="rn-meta">Challenge 0726 &middot; July 2026</span>
+        <span class="rn-title">Canonically Yours</span>
+        <span class="rn-note">Duplicate JSON keys, so authorization validates one package and the renderer uses another. The same shape as this one.</span>
+      </a>
+    </div>
+    <p class="rn-all"><a href="../">All write-ups</a></p>
+  </nav>
+
   <div class="signoff">
     <div class="bars" aria-hidden="true">
       <i style="background:#22D3EE"></i><i style="background:#0EA5B7"></i>
@@ -806,6 +1084,31 @@ run sbin srv sys tmp usr var <span class="w">the_real.flag</span> app <span clas
     try { localStorage.setItem('theme', next); } catch (e) {}
   });
   document.body.appendChild(btn);
+
+  /* diagrams: each <g data-at="s"> waits, then plays in on scroll. click replays. */
+  var motionOK = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var figs = document.querySelectorAll('.fig.is-motion');
+  if (motionOK && figs.length && 'IntersectionObserver' in window) {
+    root.classList.add('js-motion');
+    document.querySelectorAll('.diagram [data-at]').forEach(function (g) {
+      g.style.animationDelay = (parseFloat(g.getAttribute('data-at')) || 0) + 's';
+    });
+    var play = function (f) {
+      f.classList.remove('is-playing');
+      void f.offsetWidth;
+      f.classList.add('is-playing');
+    };
+    var fio = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { play(e.target); fio.unobserve(e.target); }
+      });
+    }, { threshold: 0.3 });
+    figs.forEach(function (f) {
+      fio.observe(f);
+      f.querySelector('.frame').addEventListener('click', function () { play(f); });
+      f.querySelector('.frame').title = 'Click to replay';
+    });
+  }
 
   var vault = document.querySelector('.vault');
   if (vault && 'IntersectionObserver' in window) {
