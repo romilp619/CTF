@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CTF write-ups · Romil Patel</title>
+<meta name="description" content="Monthly Intigriti challenge write-ups: how each bug was found, what was ruled out along the way, and how it was fixed.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#9873;</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+  :root {
+    --paper:#F4F7F9; --surface:#FFFFFF; --surface-2:#E6EDF2;
+    --ink:#0D1723; --ink-2:#36475A; --muted:#67798C; --rule:#D2DDE6;
+    --signal:#0B6E7A;
+    --shadow:0 1px 2px rgba(13,23,35,.05), 0 8px 24px -12px rgba(13,23,35,.22);
+    --step--1:clamp(.78rem,.76rem + .1vw,.84rem);
+    --step-0:clamp(1rem,.97rem + .16vw,1.09rem);
+    --step-1:clamp(1.2rem,1.13rem + .34vw,1.42rem);
+    --step-3:clamp(2rem,1.7rem + 1.5vw,3.1rem);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#060E15; --surface:#0E1C26; --surface-2:#16293A;
+      --ink:#E8F1F5; --ink-2:#B3C7D2; --muted:#7D94A2; --rule:#1F3543;
+      --signal:#22D3EE;
+      --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 30px -14px rgba(0,0,0,.8);
+    }
+  }
+  *, *::before, *::after { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size:var(--step-0); line-height:1.65; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:68ch; margin-inline:auto; padding:0 1.4rem 5rem; }
+  h1,h2 { font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif; line-height:1.14; margin:0; text-wrap:balance; }
+  a { color:var(--signal); text-underline-offset:3px; }
+  code { font-family:"IBM Plex Mono",monospace; }
+
+  header { border-bottom:1px solid var(--rule); padding:clamp(3rem,9vw,5rem) 0 2.2rem; margin-bottom:2.4rem; }
+  .eyebrow {
+    font-family:"IBM Plex Mono",monospace; font-size:var(--step--1); letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); display:flex; gap:.6rem; align-items:center;
+  }
+  .eyebrow .dot { width:7px;height:7px;border-radius:50%;background:var(--signal); }
+  h1 { font-size:var(--step-3); font-weight:700; letter-spacing:-.02em; margin:.9rem 0 .7rem; }
+  .standfirst { font-size:var(--step-1); color:var(--ink-2); max-width:52ch; margin:0; }
+
+  ul.list { list-style:none; margin:0; padding:0; display:grid; gap:.9rem; }
+  .card {
+    display:block; text-decoration:none; color:inherit;
+    background:var(--surface); border:1px solid var(--rule); border-left:3px solid var(--signal);
+    border-radius:6px; padding:1rem 1.15rem; box-shadow:var(--shadow);
+    transition:transform .12s ease, border-color .12s ease;
+  }
+  .card:hover { transform:translateY(-2px); }
+  .card:focus-visible { outline:2px solid var(--signal); outline-offset:3px; }
+  .card .meta {
+    font-family:"IBM Plex Mono",monospace; font-size:.66rem; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); display:flex; flex-wrap:wrap; gap:.4rem .9rem;
+  }
+  .card h2 { font-size:var(--step-1); font-weight:600; margin:.4rem 0 .35rem; color:var(--ink); }
+  .card p { margin:0; font-size:var(--step--1); color:var(--ink-2); }
+
+  footer { margin-top:3rem; padding-top:1.6rem; border-top:1px solid var(--rule);
+    font-size:var(--step--1); color:var(--muted); }
+  footer a { color:var(--signal); text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot" aria-hidden="true"></span><span>Write-ups</span></div>
+    <h1>CTF write-ups</h1>
+    <p class="standfirst">Intigriti's monthly challenge, worked through end to end. How the bug was
+      found, what got ruled out on the way, and how it should have been written.</p>
+  </header>
+
+  <ul class="list">
+
+    <li><a class="card" href="Intigriti-1126-Super-Fast-Server/">
+      <div class="meta"><span>Challenge 1126</span><span>November 2026</span><span>Signature bypass &middot; RCE</span></div>
+      <h2>The signature that covered the wrong bytes</h2>
+      <p>A server that only runs RSA-2048 signed code, and publishes a working signed example in its
+        own help text. The signature verifies. It just does not cover the bytes that run.</p>
+    </a></li>
+
+    <li><a class="card" href="Intigriti-1026-Halloween-Store/">
+      <div class="meta"><span>Challenge 1026</span><span>October 2026</span><span>Business logic</span></div>
+      <h2>The coupon that never runs out</h2>
+      <p>A &euro;666 box, &euro;66 of credit, and a duplicate check that only ever looks at the last
+        promotion applied. Alternate two codes and the discount never stops.</p>
+    </a></li>
+
+    <li><a class="card" href="Intigriti-0926-Critter-Gallery/">
+      <div class="meta"><span>Challenge 0926</span><span>September 2026</span><span>SQL injection</span></div>
+      <h2>Critter Gallery</h2>
+      <p>A base64-wrapped parameter that turns out to be an encoding rather than a filter, a
+        case-sensitivity differential, and a database table the app never references.</p>
+    </a></li>
+
+    <li><a class="card" href="Intigriti-0826-Bad-Reception/">
+      <div class="meta"><span>Challenge 0826</span><span>August 2026</span><span>Stored XSS</span></div>
+      <h2>Bad Reception</h2>
+      <p>Prefix-only validation, stored HTML injection into an admin bot, and a JSONP gadget already
+        sitting on the origin.</p>
+    </a></li>
+
+    <li><a class="card" href="Intigriti-0726-Canonically-Yours/">
+      <div class="meta"><span>Challenge 0726</span><span>July 2026</span><span>Parser differential</span></div>
+      <h2>Canonically Yours</h2>
+      <p>Duplicate JSON keys parsed two different ways, so authorization validates one package while
+        the report renderer uses another. The same check-one-thing, use-another shape as 1126.</p>
+    </a></li>
+
+  </ul>
+
+  <footer>
+    <p>By <a href="https://github.com/romilp619">Romil Patel</a> &middot;
+      <a href="https://github.com/romilp619/CTF">source on GitHub</a></p>
+  </footer>
+
+</div>
+</body>
+</html>

