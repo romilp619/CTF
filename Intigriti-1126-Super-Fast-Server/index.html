@@ -97,6 +97,16 @@
   .striplink a::before { content:"\203A "; color:var(--signal); }
   .striplink a:hover { color:var(--signal); }
 
+  /* ---------- the film ---------- */
+  .film { margin:2.6rem 0 0; }
+  .film figure { margin:0; }
+  .film .frame {
+    position:relative; border-radius:10px; overflow:hidden;
+    border:1px solid var(--rule); background:#030A0F; box-shadow:var(--shadow);
+    aspect-ratio:16/9;
+  }
+  .film video { display:block; width:100%; height:100%; object-fit:cover; background:#030A0F; }
+
   section { padding:3.2rem 0 0; }
   .ch {
     display:flex; align-items:baseline; gap:.8rem; font-family:"IBM Plex Mono",monospace;
@@ -264,6 +274,18 @@
          rel="noopener noreferrer">challenge&#8209;1126.challenges.intigriti.io</a>
     </div>
   </header>
+
+  <!-- ============================================ -->
+  <div class="film">
+    <figure>
+      <div class="frame">
+        <video controls playsinline preload="metadata" poster="media/poster.jpg">
+          <source src="media/explainer.mp4" type="video/mp4">
+          Your browser cannot play this video. The written walkthrough below covers the same ground.
+        </video>
+      </div>
+    </figure>
+  </div>
 
   <!-- ============================================ -->
   <section>
